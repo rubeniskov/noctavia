@@ -1,5 +1,5 @@
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Program, event};
-use iced::widget::{column, text, container, row, pick_list, button, slider, horizontal_space, vertical_space, scrollable};
+use iced::widget::{column, text, container, row, pick_list, button, slider, horizontal_space, vertical_space, scrollable, checkbox};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme, Renderer, Subscription, Alignment};
 use iced::mouse;
 use std::time::{Duration, Instant};
@@ -78,6 +78,8 @@ struct MidiTrainer {
     bpm: f32,
     muted_tracks: HashSet<usize>,
     active_mouse_key: Option<u8>,
+    reverb_enabled: bool,
+    chorus_enabled: bool,
 }
 
 impl Default for MidiTrainer {
@@ -102,6 +104,8 @@ impl Default for MidiTrainer {
             bpm: 120.0,
             muted_tracks: HashSet::new(),
             active_mouse_key: None,
+            reverb_enabled: true,
+            chorus_enabled: true,
         }
     }
 }
@@ -125,6 +129,8 @@ enum Message {
     MouseNoteOn(u8),
     MouseNoteOff(u8),
     MouseNoteDrag(u8),
+    ToggleReverb(bool),
+    ToggleChorus(bool),
 }
 
 impl MidiTrainer {
@@ -178,6 +184,14 @@ impl MidiTrainer {
                                 if cc.tick >= old_tick && cc.tick < new_tick {
                                     if let Some(synth) = &self.synth {
                                         synth.control_change(t_idx as u8, cc.controller, cc.value);
+                                    }
+                                }
+                            }
+
+                            for pc in &track.program_changes {
+                                if pc.tick >= old_tick && pc.tick < new_tick {
+                                    if let Some(synth) = &self.synth {
+                                        synth.program_change(t_idx as u8, pc.program);
                                     }
                                 }
                             }
@@ -332,6 +346,22 @@ impl MidiTrainer {
             Message::BpmChanged(val) => {
                 self.bpm = val;
             }
+            Message::ToggleReverb(enabled) => {
+                self.reverb_enabled = enabled;
+                if let Some(synth) = &self.synth {
+                    for i in 0..16 {
+                        synth.control_change(i, 91, if enabled { 40 } else { 0 });
+                    }
+                }
+            }
+            Message::ToggleChorus(enabled) => {
+                self.chorus_enabled = enabled;
+                if let Some(synth) = &self.synth {
+                    for i in 0..16 {
+                        synth.control_change(i, 93, if enabled { 40 } else { 0 });
+                    }
+                }
+            }
             Message::MouseNoteOn(key) => {
                 self.active_keys.insert(key);
                 self.active_mouse_key = Some(key);
@@ -424,12 +454,16 @@ impl MidiTrainer {
                 horizontal_space().width(20),
                 if !self.presets.is_empty() {
                     Element::from(
-                        pick_list(&self.presets[..], self.selected_preset.clone(), Message::PresetSelected)
-                            .placeholder("Select Instrument")
-                            .width(200)
+                        row![
+                            checkbox("Reverb", self.reverb_enabled).on_toggle(Message::ToggleReverb),
+                            checkbox("Chorus", self.chorus_enabled).on_toggle(Message::ToggleChorus),
+                            pick_list(&self.presets[..], self.selected_preset.clone(), Message::PresetSelected)
+                                .placeholder("Select Instrument")
+                                .width(200)
+                        ].spacing(10).align_y(Alignment::Center)
                     )
                 } else {
-                    Element::from(text("No SF2 loaded").color(Color::from_rgb(0.4, 0.4, 0.4)))
+                    text("No SF2 loaded").color(Color::from_rgb(0.4, 0.4, 0.4)).into()
                 },
                 horizontal_space().width(Length::Fill),
                 pick_list(self.midi_ports.clone(), self.selected_port.clone(), Message::PortSelected)

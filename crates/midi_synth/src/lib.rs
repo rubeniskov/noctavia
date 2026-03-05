@@ -44,7 +44,9 @@ impl MidiSynth {
         }).collect();
 
         let sf_arc = Arc::new(sf);
-        let settings = SynthesizerSettings::new(sample_rate as i32);
+        let mut settings = SynthesizerSettings::new(sample_rate as i32);
+        settings.enable_reverb_and_chorus = true;
+        
         let synth = Synthesizer::new(&sf_arc, &settings).map_err(|e| anyhow::anyhow!("Failed to create Synthesizer: {:?}", e))?;
         
         Ok(Self {
@@ -85,6 +87,12 @@ impl MidiSynth {
             synth.process_midi_message(channel as i32, 0xB0, 0, bank);
             // Program Change is 0xC0
             synth.process_midi_message(channel as i32, 0xC0, patch, 0);
+        }
+    }
+
+    pub fn set_master_volume(&self, volume: f32) {
+        if let Ok(mut synth) = self.synth.lock() {
+            synth.set_master_volume(volume);
         }
     }
 

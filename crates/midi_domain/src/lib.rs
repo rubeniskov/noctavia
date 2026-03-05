@@ -34,9 +34,16 @@ pub struct ControlChange {
     pub value: u8,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ProgramChange {
+    pub tick: u64,
+    pub program: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub name: String,
     pub notes: Vec<Note>,
     pub control_changes: Vec<ControlChange>,
+    pub program_changes: Vec<ProgramChange>,
 }
