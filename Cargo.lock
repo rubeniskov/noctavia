@@ -2449,6 +2449,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ui_iced_widgets",
+ "ui_transport",
 ]
 
 [[package]]
@@ -4408,7 +4409,17 @@ name = "ui_iced_widgets"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "midi_clock",
  "midi_domain",
+]
+
+[[package]]
+name = "ui_transport"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "midi_clock",
+ "note_matcher",
 ]
 
 [[package]]

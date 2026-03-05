@@ -1,9 +1,9 @@
 [package]
-name = "ui_iced_widgets"
+name = "ui_transport"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 iced.workspace = true
-midi_domain = { path = "../midi_domain" }
 midi_clock = { path = "../midi_clock" }
+note_matcher = { path = "../note_matcher" }

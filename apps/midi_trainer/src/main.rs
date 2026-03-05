@@ -1,15 +1,15 @@
-use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Program, event};
 use iced::widget::{column, text, container, row, pick_list, button, slider, horizontal_space, vertical_space, scrollable, checkbox};
-use iced::{Color, Element, Length, Point, Rectangle, Size, Theme, Renderer, Subscription, Alignment};
-use iced::mouse;
+use iced::{Color, Element, Length, Theme, Subscription, Alignment};
 use std::time::{Duration, Instant};
 use midi_domain::Song;
 use midi_clock::Clock;
 use midi_io::{MidiEvent, MidiInputHandler};
 use note_matcher::{NoteMatcher, Score};
 use midi_synth::{MidiSynth, PresetInfo};
+use ui_iced_widgets::{PianoRoll, get_track_color};
+use ui_transport::TransportBar;
 use std::path::PathBuf;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use clap::Parser;
 
@@ -45,7 +45,7 @@ pub fn main() -> iced::Result {
 
     iced::application("Rusthesia", MidiTrainer::update, MidiTrainer::view)
         .subscription(MidiTrainer::subscription)
-        .theme(|_| Theme::Dark)
+        .theme(|_| Theme::CatppuccinMacchiato)
         .run_with(move || {
             let mut app = MidiTrainer::default();
             let mut tasks = Vec::new();
@@ -99,6 +99,7 @@ struct MidiTrainer {
     clock: Clock,
     song: Option<Song>,
     active_keys: HashSet<u8>,
+    song_active_keys: HashMap<u8, i32>,
     matcher: Option<NoteMatcher>,
     
     midi_ports: Vec<String>,
@@ -117,7 +118,6 @@ struct MidiTrainer {
     is_playing: bool,
     bpm: f32,
     muted_tracks: HashSet<usize>,
-    active_mouse_key: Option<u8>,
     reverb_enabled: bool,
     chorus_enabled: bool,
     music_font: Option<iced::Font>,
@@ -131,6 +131,7 @@ impl Default for MidiTrainer {
             clock: Clock::new(480),
             song: None,
             active_keys: HashSet::new(),
+            song_active_keys: HashMap::new(),
             matcher: None,
             midi_ports: Vec::new(),
             selected_port: None,
@@ -144,7 +145,6 @@ impl Default for MidiTrainer {
             is_playing: true,
             bpm: 120.0,
             muted_tracks: HashSet::new(),
-            active_mouse_key: None,
             reverb_enabled: true,
             chorus_enabled: true,
             music_font: None,
@@ -170,7 +170,7 @@ enum Message {
     BpmChanged(f32),
     MouseNoteOn(u8),
     MouseNoteOff(u8),
-    MouseNoteDrag(u8),
+    MouseNoteDrag(u8, u8),
     ToggleReverb(bool),
     ToggleChorus(bool),
 }
@@ -182,6 +182,7 @@ impl MidiTrainer {
         if let Some(synth) = &self.synth {
             synth.all_notes_off();
         }
+        self.song_active_keys.clear();
         self.last_tick = Instant::now();
         self.song = Some(song);
         self.is_playing = true;
@@ -213,11 +214,18 @@ impl MidiTrainer {
                                     if let Some(synth) = &self.synth {
                                         synth.note_on(t_idx as u8, note.key, note.velocity);
                                     }
+                                    *self.song_active_keys.entry(note.key).or_insert(0) += 1;
                                 }
 
                                 if note_end_tick >= old_tick && note_end_tick < new_tick {
                                     if let Some(synth) = &self.synth {
                                         synth.note_off(t_idx as u8, note.key);
+                                    }
+                                    if let Some(count) = self.song_active_keys.get_mut(&note.key) {
+                                        *count -= 1;
+                                        if *count <= 0 {
+                                            self.song_active_keys.remove(&note.key);
+                                        }
                                     }
                                 }
                             }
@@ -367,6 +375,7 @@ impl MidiTrainer {
                     if let Some(synth) = &self.synth {
                         synth.all_notes_off();
                     }
+                    self.song_active_keys.clear();
                 }
             }
             Message::Seek(val) => {
@@ -376,6 +385,7 @@ impl MidiTrainer {
                     if let Some(synth) = &self.synth {
                         synth.all_notes_off();
                     }
+                    self.song_active_keys.clear();
                 }
             }
             Message::ToggleTrack(idx) => {
@@ -406,34 +416,27 @@ impl MidiTrainer {
             }
             Message::MouseNoteOn(key) => {
                 self.active_keys.insert(key);
-                self.active_mouse_key = Some(key);
                 if let Some(synth) = &self.synth {
                     synth.note_on(15, key, 100);
                 }
             }
             Message::MouseNoteOff(key) => {
                 self.active_keys.remove(&key);
-                self.active_mouse_key = None;
                 if let Some(synth) = &self.synth {
                     synth.note_off(15, key);
                 }
             }
-            Message::MouseNoteDrag(key) => {
-                if let Some(old_key) = self.active_mouse_key {
-                    if old_key != key {
-                        // Release old
-                        self.active_keys.remove(&old_key);
-                        if let Some(synth) = &self.synth {
-                            synth.note_off(15, old_key);
-                        }
-                        
-                        // Press new
-                        self.active_keys.insert(key);
-                        self.active_mouse_key = Some(key);
-                        if let Some(synth) = &self.synth {
-                            synth.note_on(15, key, 100);
-                        }
-                    }
+            Message::MouseNoteDrag(old_key, new_key) => {
+                // Release old
+                self.active_keys.remove(&old_key);
+                if let Some(synth) = &self.synth {
+                    synth.note_off(15, old_key);
+                }
+                
+                // Press new
+                self.active_keys.insert(new_key);
+                if let Some(synth) = &self.synth {
+                    synth.note_on(15, new_key, 100);
                 }
             }
         }
@@ -522,33 +525,26 @@ impl MidiTrainer {
             ..Default::default()
         });
 
-        // --- Bottom Transport ---
-        let footer = container(
-            row![
-                button(if self.is_playing { "Pause" } else { "Play" }).on_press(Message::TogglePlay).width(80),
-                text(format!("{:02}:{:02}", (self.clock.current_secs / 60.0) as i32, (self.clock.current_secs % 60.0) as i32)).size(14),
-                slider(0.0..=300.0, self.clock.current_secs, Message::Seek).width(Length::Fill),
-                text("BPM").size(12),
-                text(format!("{}", self.bpm as i32)).size(14),
-                column![
-                    text(format!("Hits: {}", score.hits)).color(Color::from_rgb(0.0, 1.0, 0.0)).size(12),
-                    text(format!("Misses: {}", score.misses)).color(Color::from_rgb(1.0, 0.0, 0.0)).size(12),
-                ]
-            ]
-            .spacing(20)
-            .align_y(Alignment::Center)
-            .padding(15)
-        )
-        .width(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgb(0.07, 0.07, 0.1).into()),
-            ..Default::default()
-        });
-
         let main_content = column![
             header,
-            Canvas::new(self).width(Length::Fill).height(Length::Fill),
-            footer,
+            PianoRoll::new(
+                self.song.as_ref(),
+                &self.clock,
+                &self.active_keys,
+                &self.song_active_keys,
+                &self.muted_tracks,
+                Message::MouseNoteOn,
+                Message::MouseNoteOff,
+                Message::MouseNoteDrag,
+            ).music_font(self.music_font).view(),
+            TransportBar::new(
+                self.is_playing,
+                &self.clock,
+                self.bpm,
+                score,
+                Message::TogglePlay,
+                Message::Seek,
+            ).view(),
         ];
 
         row![sidebar, main_content].into()
@@ -584,274 +580,5 @@ impl MidiTrainer {
                 }
             }
         })
-    }
-}
-
-fn get_track_color(idx: usize) -> Color {
-    match idx % 4 {
-        0 => Color::from_rgb(0.0, 0.8, 1.0), // Cyan
-        1 => Color::from_rgb(1.0, 0.0, 0.5), // Magenta
-        2 => Color::from_rgb(0.0, 1.0, 0.4), // Green
-        _ => Color::from_rgb(1.0, 0.8, 0.0), // Yellow
-    }
-}
-
-fn get_note_y(key: u8, center_y: f32, spacing: f32) -> Option<f32> {
-    // Middle C is 60. 
-    // In our staff:
-    // Treble bottom line is E4 (64).
-    // Bass top line is A3 (57).
-    
-    // Mapping MIDI key to staff position (in 0.5 spacing units)
-    // C=0, C#=0, D=1, D#=1, E=2, F=3, F#=3, G=4, G#=4, A=5, A#=5, B=6
-    let notes_in_octave = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-    let octave = (key / 12) as i32 - 1; // MIDI octave
-    let note_idx = (key % 12) as usize;
-    let diatonic_pos = (octave * 7) + notes_in_octave[note_idx];
-    
-    // Middle C (C4, key 60) diatonic_pos = (4*7) + 0 = 28
-    let middle_c_pos = 28;
-    let relative_pos = diatonic_pos - middle_c_pos;
-    
-    // Treble staff starts at +2 diatonic steps from middle C (E4 is 2 steps above C4: D4, E4)
-    // Actually E4 is diatonic 30. 30-28 = 2.
-    // Each diatonic step is 0.5 * spacing in Y.
-    
-    if key >= 60 {
-        // Treble clef or above
-        Some(center_y - 12.0 - (relative_pos as f32 * spacing * 0.5))
-    } else {
-        // Bass clef or below
-        Some(center_y + 12.0 - (relative_pos as f32 * spacing * 0.5))
-    }
-}
-
-fn get_note_symbol(duration_ticks: u64, ticks_per_quarter: u16) -> &'static str {
-    let quarter = ticks_per_quarter as f32;
-    let dur = duration_ticks as f32;
-    
-    if dur > quarter * 3.0 {
-        "\u{1D15D}" // Whole note
-    } else if dur > quarter * 1.5 {
-        "\u{1D15E}" // Half note
-    } else if dur > quarter * 0.75 {
-        "\u{1D15F}" // Quarter note
-    } else if dur > quarter * 0.375 {
-        "\u{1D160}" // Eighth note
-    } else {
-        "\u{1D161}" // Sixteenth note
-    }
-}
-
-impl Program<Message> for MidiTrainer {
-    type State = ();
-
-    fn update(&self, _state: &mut Self::State, event: event::Event, bounds: Rectangle, cursor: mouse::Cursor) -> (event::Status, Option<Message>) {
-        let cursor_position = if let Some(p) = cursor.position_in(bounds) {
-            p
-        } else {
-            return (event::Status::Ignored, None);
-        };
-
-        let keyboard_height = 100.0;
-        let hit_line_y = bounds.height - keyboard_height;
-
-        if cursor_position.y >= hit_line_y {
-            let key_width = bounds.width / 88.0;
-            let key_index = (cursor_position.x / key_width).floor() as u8 + 21;
-            let key = key_index.clamp(21, 108);
-
-            match event {
-                event::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                    return (event::Status::Captured, Some(Message::MouseNoteOn(key)));
-                }
-                event::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                    if let Some(active_key) = self.active_mouse_key {
-                         return (event::Status::Captured, Some(Message::MouseNoteOff(active_key)));
-                    }
-                }
-                event::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                    if let Some(old_key) = self.active_mouse_key {
-                        if old_key != key {
-                            return (event::Status::Captured, Some(Message::MouseNoteDrag(key)));
-                        }
-                    }
-                }
-                _ => {}
-            }
-        } else if let Some(active_key) = self.active_mouse_key {
-            // If mouse moves out of keyboard while pressed, release it
-            match event {
-                event::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                    return (event::Status::Captured, Some(Message::MouseNoteOff(active_key)));
-                }
-                event::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                    // Released if dragged outside the piano
-                    return (event::Status::Captured, Some(Message::MouseNoteOff(active_key)));
-                }
-                _ => {}
-            }
-        }
-
-        (event::Status::Ignored, None)
-    }
-
-    fn draw(&self, _state: &Self::State, renderer: &Renderer, _theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let keyboard_height = 100.0;
-        let staff_height = 150.0;
-        let hit_line_y = bounds.height - keyboard_height;
-        let roll_top_y = staff_height;
-        let lookahead_secs = 4.0;
-        let key_width = bounds.width / 88.0;
-
-        // --- Draw Staff Background ---
-        frame.fill_rectangle(Point::new(0.0, 0.0), Size::new(bounds.width, staff_height), Color::from_rgb(0.08, 0.08, 0.1));
-        
-        // Draw Grand Staff Lines
-        let staff_center_y = staff_height / 2.0;
-        let line_spacing = 8.0;
-        let staff_stroke = canvas::Stroke::default().with_color(Color::from_rgb(0.3, 0.3, 0.4)).with_width(1.0);
-        
-        // Treble Staff (top)
-        for i in 0..5 {
-            let y = staff_center_y - 20.0 - (i as f32 * line_spacing);
-            frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), staff_stroke);
-        }
-        // Bass Staff (bottom)
-        for i in 0..5 {
-            let y = staff_center_y + 20.0 + (i as f32 * line_spacing);
-            frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), staff_stroke);
-        }
-
-        // Draw Clefs if font is available
-        if let Some(font) = self.music_font {
-            // Treble Clef: U+1D11E
-            frame.fill_text(canvas::Text {
-                content: String::from("\u{1D11E}"),
-                position: Point::new(20.0, staff_center_y - 20.0 - (line_spacing * 3.0)),
-                size: (line_spacing * 4.5).into(),
-                font,
-                color: Color::WHITE,
-                ..Default::default()
-            });
-            // Bass Clef: U+1D122
-            frame.fill_text(canvas::Text {
-                content: String::from("\u{1D122}"),
-                position: Point::new(20.0, staff_center_y + 20.0 - (line_spacing * 0.5)),
-                size: (line_spacing * 3.5).into(),
-                font,
-                color: Color::WHITE,
-                ..Default::default()
-            });
-        }
-
-        // Draw staff vertical marker (current time)
-        let staff_now_x = 100.0;
-        frame.stroke(&Path::line(Point::new(staff_now_x, 0.0), Point::new(staff_now_x, staff_height)), 
-            canvas::Stroke::default().with_color(Color::from_rgb(1.0, 0.5, 0.0)).with_width(2.0));
-
-        // --- Draw Staff Notes ---
-        let staff_secs_per_px = 0.02; // 50px per second
-        if let Some(ref song) = self.song {
-            for (t_idx, track) in song.tracks.iter().enumerate() {
-                if self.muted_tracks.contains(&t_idx) { continue; }
-                let color = get_track_color(t_idx);
-                
-                for note in &track.notes {
-                    let note_start_secs = self.clock.ticks_to_secs(note.start_tick, &song.tempo_map);
-                    let note_end_secs = self.clock.ticks_to_secs(note.start_tick + note.duration_ticks, &song.tempo_map);
-                    
-                    // Notes visible in staff (e.g., 2 seconds lookahead/behind)
-                    if note_end_secs > self.clock.current_secs - 2.0 && note_start_secs < self.clock.current_secs + 8.0 {
-                        let x_start = staff_now_x + (note_start_secs - self.clock.current_secs) / staff_secs_per_px;
-                        let x_end = staff_now_x + (note_end_secs - self.clock.current_secs) / staff_secs_per_px;
-                        
-                        if let Some(y) = get_note_y(note.key, staff_center_y, line_spacing) {
-                            if let Some(font) = self.music_font {
-                                let symbol = get_note_symbol(note.duration_ticks, song.ticks_per_quarter);
-                                frame.fill_text(canvas::Text {
-                                    content: String::from(symbol),
-                                    position: Point::new(x_start - 4.0, y - line_spacing * 0.8),
-                                    size: (line_spacing * 2.5).into(),
-                                    font,
-                                    color,
-                                    ..Default::default()
-                                });
-                            } else {
-                                frame.stroke(&Path::line(Point::new(x_start, y), Point::new(x_end, y)), 
-                                    canvas::Stroke::default().with_color(color).with_width(4.0));
-                                frame.fill_rectangle(Point::new(x_start - 2.0, y - 4.0), Size::new(8.0, 8.0), color);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // --- Draw Piano Roll Grid Lines ---
-        let beat_spacing_secs = 0.5;
-        let mut t = (self.clock.current_secs / beat_spacing_secs).floor() * beat_spacing_secs;
-        while t < self.clock.current_secs + lookahead_secs {
-            if t >= self.clock.current_secs {
-                let y = hit_line_y - ((t - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
-                if y >= roll_top_y {
-                    frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), 
-                        canvas::Stroke::default().with_color(Color::from_rgb(0.15, 0.15, 0.2)).with_width(1.0));
-                }
-            }
-            t += beat_spacing_secs;
-        }
-
-        // --- Draw Piano Roll Notes ---
-        if let Some(ref song) = self.song {
-            for (t_idx, track) in song.tracks.iter().enumerate() {
-                if self.muted_tracks.contains(&t_idx) { continue; }
-                let color = get_track_color(t_idx);
-                
-                for note in &track.notes {
-                    let note_start_secs = self.clock.ticks_to_secs(note.start_tick, &song.tempo_map);
-                    let note_end_secs = self.clock.ticks_to_secs(note.start_tick + note.duration_ticks, &song.tempo_map);
-                    
-                    if note_end_secs > self.clock.current_secs && note_start_secs < self.clock.current_secs + lookahead_secs {
-                        let x = (note.key as f32 - 21.0) * key_width;
-                        let y_start = hit_line_y - ((note_start_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
-                        let y_end = hit_line_y - ((note_end_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
-                        
-                        let y_start_clamped = y_start.min(hit_line_y);
-                        let y_end_clamped = y_end.max(roll_top_y);
-
-                        if y_start_clamped > y_end_clamped {
-                            frame.fill_rectangle(
-                                Point::new(x + 1.0, y_end_clamped),
-                                Size::new(key_width - 2.0, (y_start_clamped - y_end_clamped).max(4.0)),
-                                color
-                            );
-                            frame.fill_rectangle(Point::new(x + 1.0, y_end_clamped), Size::new(key_width - 2.0, 2.0), Color::WHITE);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Draw keyboard
-        for i in 21..=108 {
-            let x = (i as f32 - 21.0) * key_width;
-            let is_active = self.active_keys.contains(&i);
-            let note_in_octave = i % 12;
-            let is_black = [1, 3, 6, 8, 10].contains(&note_in_octave);
-            
-            let key_color = if is_active { Color::from_rgb(1.0, 1.0, 0.5) } 
-                            else if is_black { Color::from_rgb(0.05, 0.05, 0.05) } 
-                            else { Color::from_rgb(0.95, 0.95, 0.95) };
-
-            frame.fill_rectangle(Point::new(x, hit_line_y), Size::new(key_width - 1.0, keyboard_height), key_color);
-            if !is_black {
-                frame.stroke(&Path::rectangle(Point::new(x, hit_line_y), Size::new(key_width - 1.0, keyboard_height)),
-                    canvas::Stroke::default().with_color(Color::from_rgb(0.8, 0.8, 0.8)).with_width(0.5));
-            }
-        }
-
-        vec![frame.into_geometry()]
     }
 }

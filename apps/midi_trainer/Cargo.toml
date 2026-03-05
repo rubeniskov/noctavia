@@ -12,6 +12,7 @@ midi_clock = { path = "../../crates/midi_clock" }
 midi_io = { path = "../../crates/midi_io" }
 note_matcher = { path = "../../crates/note_matcher" }
 ui_iced_widgets = { path = "../../crates/ui_iced_widgets" }
+ui_transport = { path = "../../crates/ui_transport" }
 midi_synth = { path = "../../crates/midi_synth" }
 tracing.workspace = true
 tracing-subscriber.workspace = true
