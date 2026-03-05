@@ -173,6 +173,14 @@ impl MidiTrainer {
                                     }
                                 }
                             }
+
+                            for cc in &track.control_changes {
+                                if cc.tick >= old_tick && cc.tick < new_tick {
+                                    if let Some(synth) = &self.synth {
+                                        synth.control_change(t_idx as u8, cc.controller, cc.value);
+                                    }
+                                }
+                            }
                         }
                     }
                     
@@ -201,6 +209,11 @@ impl MidiTrainer {
                         self.active_keys.remove(&key);
                         if let Some(synth) = &self.synth {
                             synth.note_off(15, key);
+                        }
+                    }
+                    MidiEvent::ControlChange { controller, value } => {
+                        if let Some(synth) = &self.synth {
+                            synth.control_change(15, controller, value);
                         }
                     }
                 }

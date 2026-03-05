@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use midi_domain::{Note, Song, Track, TempoMap, TempoChange};
+use midi_domain::{Note, Song, Track, TempoMap, TempoChange, ControlChange};
 use midly::{Header, Smf, TrackEventKind};
 use std::collections::HashMap;
 
@@ -15,6 +15,7 @@ pub fn parse_file(data: &[u8]) -> Result<Song> {
 
     for (i, midly_track) in smf.tracks.iter().enumerate() {
         let mut notes = Vec::new();
+        let mut control_changes = Vec::new();
         let mut active_notes: HashMap<(u8, u8), (u64, u8)> = HashMap::new();
         let mut current_tick = 0u64;
         let mut track_name = format!("Track {}", i);
@@ -62,6 +63,13 @@ pub fn parse_file(data: &[u8]) -> Result<Song> {
                                 });
                             }
                         }
+                        midly::MidiMessage::Controller { controller, value } => {
+                            control_changes.push(ControlChange {
+                                tick: current_tick,
+                                controller: controller.as_int(),
+                                value: value.as_int(),
+                            });
+                        }
                         _ => {}
                     }
                 }
@@ -69,10 +77,11 @@ pub fn parse_file(data: &[u8]) -> Result<Song> {
             }
         }
 
-        if !notes.is_empty() {
+        if !notes.is_empty() || !control_changes.is_empty() {
             tracks.push(Track {
                 name: track_name,
                 notes,
+                control_changes,
             });
         }
     }

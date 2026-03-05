@@ -66,6 +66,12 @@ impl MidiSynth {
         }
     }
 
+    pub fn control_change(&self, channel: u8, controller: u8, value: u8) {
+        if let Ok(mut synth) = self.synth.lock() {
+            synth.process_midi_message(channel as i32, 0xB0, controller as i32, value as i32);
+        }
+    }
+
     pub fn program_change(&self, channel: u8, program: u8) {
         if let Ok(mut synth) = self.synth.lock() {
             // Program Change command is 0xC0

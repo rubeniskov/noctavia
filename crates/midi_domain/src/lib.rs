@@ -27,8 +27,16 @@ pub struct TempoChange {
     pub micros_per_quarter: u32,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ControlChange {
+    pub tick: u64,
+    pub controller: u8,
+    pub value: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub name: String,
     pub notes: Vec<Note>,
+    pub control_changes: Vec<ControlChange>,
 }

@@ -6,6 +6,7 @@ use anyhow::{anyhow, Result};
 pub enum MidiEvent {
     NoteOn { key: u8, velocity: u8 },
     NoteOff { key: u8 },
+    ControlChange { controller: u8, value: u8 },
 }
 
 pub struct MidiInputHandler {
@@ -47,6 +48,9 @@ impl MidiInputHandler {
                         }
                         0x90 | 0x80 => {
                             let _ = sender.send(MidiEvent::NoteOff { key });
+                        }
+                        0xB0 => {
+                            let _ = sender.send(MidiEvent::ControlChange { controller: key, value: vel });
                         }
                         _ => {}
                     }
