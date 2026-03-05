@@ -20,14 +20,16 @@ use iced::futures::SinkExt;
 struct Args {
     #[arg(short, long)]
     midi: Option<PathBuf>,
+    #[arg(short, long)]
+    font: Option<PathBuf>,
 }
 
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
     
     let args = Args::parse();
-    let initial_song = if let Some(path) = args.midi {
-        if let Ok(data) = std::fs::read(&path) {
+    let initial_song = if let Some(path) = &args.midi {
+        if let Ok(data) = std::fs::read(path) {
             midi_parser::parse_file(&data).ok()
         } else {
             None
@@ -36,13 +38,39 @@ pub fn main() -> iced::Result {
         None
     };
 
+    let font_path = args.font.clone();
+
     iced::application("Rusthesia", MidiTrainer::update, MidiTrainer::view)
         .subscription(MidiTrainer::subscription)
         .theme(|_| Theme::Dark)
         .run_with(move || {
             let mut app = MidiTrainer::default();
+            let mut tasks = Vec::new();
+
             if let Some(song) = initial_song {
                 app.load_song(song);
+            }
+
+            // Embedded default font
+            const DEFAULT_MUSIC_FONT: &[u8] = include_bytes!("../../../assets/MusicFont.ttf");
+
+            // Load music font (either from CLI arg or the embedded default)
+            let (data, is_custom) = if let Some(path) = font_path {
+                (std::fs::read(path).ok(), true)
+            } else {
+                (Some(DEFAULT_MUSIC_FONT.to_vec()), false)
+            };
+
+            if let Some(data) = data {
+                tasks.push(iced::font::load(std::borrow::Cow::Owned(data)));
+                app.music_font = Some(iced::Font {
+                    family: if is_custom { 
+                        iced::font::Family::Name("Custom Music Font") 
+                    } else { 
+                        iced::font::Family::Name("Noto Music") 
+                    },
+                    ..Default::default()
+                });
             }
             
             app.midi_ports = MidiInputHandler::list_ports().unwrap_or_default();
@@ -50,7 +78,7 @@ pub fn main() -> iced::Result {
                 app.selected_port = Some(app.midi_ports[0].clone());
             }
 
-            (app, iced::Task::none())
+            (app, iced::Task::batch(tasks.into_iter().map(|t| t.map(|_| Message::RefreshPorts))))
         })
 }
 
@@ -80,6 +108,7 @@ struct MidiTrainer {
     active_mouse_key: Option<u8>,
     reverb_enabled: bool,
     chorus_enabled: bool,
+    music_font: Option<iced::Font>,
 }
 
 impl Default for MidiTrainer {
@@ -106,6 +135,7 @@ impl Default for MidiTrainer {
             active_mouse_key: None,
             reverb_enabled: true,
             chorus_enabled: true,
+            music_font: None,
         }
     }
 }
@@ -554,6 +584,53 @@ fn get_track_color(idx: usize) -> Color {
     }
 }
 
+fn get_note_y(key: u8, center_y: f32, spacing: f32) -> Option<f32> {
+    // Middle C is 60. 
+    // In our staff:
+    // Treble bottom line is E4 (64).
+    // Bass top line is A3 (57).
+    
+    // Mapping MIDI key to staff position (in 0.5 spacing units)
+    // C=0, C#=0, D=1, D#=1, E=2, F=3, F#=3, G=4, G#=4, A=5, A#=5, B=6
+    let notes_in_octave = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+    let octave = (key / 12) as i32 - 1; // MIDI octave
+    let note_idx = (key % 12) as usize;
+    let diatonic_pos = (octave * 7) + notes_in_octave[note_idx];
+    
+    // Middle C (C4, key 60) diatonic_pos = (4*7) + 0 = 28
+    let middle_c_pos = 28;
+    let relative_pos = diatonic_pos - middle_c_pos;
+    
+    // Treble staff starts at +2 diatonic steps from middle C (E4 is 2 steps above C4: D4, E4)
+    // Actually E4 is diatonic 30. 30-28 = 2.
+    // Each diatonic step is 0.5 * spacing in Y.
+    
+    if key >= 60 {
+        // Treble clef or above
+        Some(center_y - 12.0 - (relative_pos as f32 * spacing * 0.5))
+    } else {
+        // Bass clef or below
+        Some(center_y + 12.0 - (relative_pos as f32 * spacing * 0.5))
+    }
+}
+
+fn get_note_symbol(duration_ticks: u64, ticks_per_quarter: u16) -> &'static str {
+    let quarter = ticks_per_quarter as f32;
+    let dur = duration_ticks as f32;
+    
+    if dur > quarter * 3.0 {
+        "\u{1D15D}" // Whole note
+    } else if dur > quarter * 1.5 {
+        "\u{1D15E}" // Half note
+    } else if dur > quarter * 0.75 {
+        "\u{1D15F}" // Quarter note
+    } else if dur > quarter * 0.375 {
+        "\u{1D160}" // Eighth note
+    } else {
+        "\u{1D161}" // Sixteenth note
+    }
+}
+
 impl Program<Message> for MidiTrainer {
     type State = ();
 
@@ -610,23 +687,111 @@ impl Program<Message> for MidiTrainer {
     fn draw(&self, _state: &Self::State, renderer: &Renderer, _theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
         let keyboard_height = 100.0;
+        let staff_height = 150.0;
         let hit_line_y = bounds.height - keyboard_height;
+        let roll_top_y = staff_height;
         let lookahead_secs = 4.0;
         let key_width = bounds.width / 88.0;
 
-        // Draw grid lines
+        // --- Draw Staff Background ---
+        frame.fill_rectangle(Point::new(0.0, 0.0), Size::new(bounds.width, staff_height), Color::from_rgb(0.08, 0.08, 0.1));
+        
+        // Draw Grand Staff Lines
+        let staff_center_y = staff_height / 2.0;
+        let line_spacing = 8.0;
+        let staff_stroke = canvas::Stroke::default().with_color(Color::from_rgb(0.3, 0.3, 0.4)).with_width(1.0);
+        
+        // Treble Staff (top)
+        for i in 0..5 {
+            let y = staff_center_y - 20.0 - (i as f32 * line_spacing);
+            frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), staff_stroke);
+        }
+        // Bass Staff (bottom)
+        for i in 0..5 {
+            let y = staff_center_y + 20.0 + (i as f32 * line_spacing);
+            frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), staff_stroke);
+        }
+
+        // Draw Clefs if font is available
+        if let Some(font) = self.music_font {
+            // Treble Clef: U+1D11E
+            frame.fill_text(canvas::Text {
+                content: String::from("\u{1D11E}"),
+                position: Point::new(20.0, staff_center_y - 20.0 - (line_spacing * 3.0)),
+                size: (line_spacing * 4.5).into(),
+                font,
+                color: Color::WHITE,
+                ..Default::default()
+            });
+            // Bass Clef: U+1D122
+            frame.fill_text(canvas::Text {
+                content: String::from("\u{1D122}"),
+                position: Point::new(20.0, staff_center_y + 20.0 - (line_spacing * 0.5)),
+                size: (line_spacing * 3.5).into(),
+                font,
+                color: Color::WHITE,
+                ..Default::default()
+            });
+        }
+
+        // Draw staff vertical marker (current time)
+        let staff_now_x = 100.0;
+        frame.stroke(&Path::line(Point::new(staff_now_x, 0.0), Point::new(staff_now_x, staff_height)), 
+            canvas::Stroke::default().with_color(Color::from_rgb(1.0, 0.5, 0.0)).with_width(2.0));
+
+        // --- Draw Staff Notes ---
+        let staff_secs_per_px = 0.02; // 50px per second
+        if let Some(ref song) = self.song {
+            for (t_idx, track) in song.tracks.iter().enumerate() {
+                if self.muted_tracks.contains(&t_idx) { continue; }
+                let color = get_track_color(t_idx);
+                
+                for note in &track.notes {
+                    let note_start_secs = self.clock.ticks_to_secs(note.start_tick, &song.tempo_map);
+                    let note_end_secs = self.clock.ticks_to_secs(note.start_tick + note.duration_ticks, &song.tempo_map);
+                    
+                    // Notes visible in staff (e.g., 2 seconds lookahead/behind)
+                    if note_end_secs > self.clock.current_secs - 2.0 && note_start_secs < self.clock.current_secs + 8.0 {
+                        let x_start = staff_now_x + (note_start_secs - self.clock.current_secs) / staff_secs_per_px;
+                        let x_end = staff_now_x + (note_end_secs - self.clock.current_secs) / staff_secs_per_px;
+                        
+                        if let Some(y) = get_note_y(note.key, staff_center_y, line_spacing) {
+                            if let Some(font) = self.music_font {
+                                let symbol = get_note_symbol(note.duration_ticks, song.ticks_per_quarter);
+                                frame.fill_text(canvas::Text {
+                                    content: String::from(symbol),
+                                    position: Point::new(x_start - 4.0, y - line_spacing * 0.8),
+                                    size: (line_spacing * 2.5).into(),
+                                    font,
+                                    color,
+                                    ..Default::default()
+                                });
+                            } else {
+                                frame.stroke(&Path::line(Point::new(x_start, y), Point::new(x_end, y)), 
+                                    canvas::Stroke::default().with_color(color).with_width(4.0));
+                                frame.fill_rectangle(Point::new(x_start - 2.0, y - 4.0), Size::new(8.0, 8.0), color);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Draw Piano Roll Grid Lines ---
         let beat_spacing_secs = 0.5;
         let mut t = (self.clock.current_secs / beat_spacing_secs).floor() * beat_spacing_secs;
         while t < self.clock.current_secs + lookahead_secs {
             if t >= self.clock.current_secs {
-                let y = hit_line_y - ((t - self.clock.current_secs) / lookahead_secs) * hit_line_y;
-                frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), 
-                    canvas::Stroke::default().with_color(Color::from_rgb(0.15, 0.15, 0.2)).with_width(1.0));
+                let y = hit_line_y - ((t - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
+                if y >= roll_top_y {
+                    frame.stroke(&Path::line(Point::new(0.0, y), Point::new(bounds.width, y)), 
+                        canvas::Stroke::default().with_color(Color::from_rgb(0.15, 0.15, 0.2)).with_width(1.0));
+                }
             }
             t += beat_spacing_secs;
         }
 
-        // Draw notes
+        // --- Draw Piano Roll Notes ---
         if let Some(ref song) = self.song {
             for (t_idx, track) in song.tracks.iter().enumerate() {
                 if self.muted_tracks.contains(&t_idx) { continue; }
@@ -638,15 +803,20 @@ impl Program<Message> for MidiTrainer {
                     
                     if note_end_secs > self.clock.current_secs && note_start_secs < self.clock.current_secs + lookahead_secs {
                         let x = (note.key as f32 - 21.0) * key_width;
-                        let y_start = hit_line_y - ((note_start_secs - self.clock.current_secs) / lookahead_secs) * hit_line_y;
-                        let y_end = hit_line_y - ((note_end_secs - self.clock.current_secs) / lookahead_secs) * hit_line_y;
+                        let y_start = hit_line_y - ((note_start_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
+                        let y_end = hit_line_y - ((note_end_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
                         
-                        frame.fill_rectangle(
-                            Point::new(x + 1.0, y_end),
-                            Size::new(key_width - 2.0, (y_start - y_end).max(4.0)),
-                            color
-                        );
-                        frame.fill_rectangle(Point::new(x + 1.0, y_end), Size::new(key_width - 2.0, 2.0), Color::WHITE);
+                        let y_start_clamped = y_start.min(hit_line_y);
+                        let y_end_clamped = y_end.max(roll_top_y);
+
+                        if y_start_clamped > y_end_clamped {
+                            frame.fill_rectangle(
+                                Point::new(x + 1.0, y_end_clamped),
+                                Size::new(key_width - 2.0, (y_start_clamped - y_end_clamped).max(4.0)),
+                                color
+                            );
+                            frame.fill_rectangle(Point::new(x + 1.0, y_end_clamped), Size::new(key_width - 2.0, 2.0), Color::WHITE);
+                        }
                     }
                 }
             }

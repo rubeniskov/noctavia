@@ -33,3 +33,7 @@ To run tests:
 ```bash
 cargo test --workspace
 ```
+
+
+## Resources
+- https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html
