@@ -1,0 +1,11 @@
+[package]
+name = "midi_io"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+midir = "0.9"
+crossbeam-channel = "0.5"
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

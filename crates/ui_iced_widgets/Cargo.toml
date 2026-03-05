@@ -1,0 +1,8 @@
+[package]
+name = "ui_iced_widgets"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+iced.workspace = true
+midi_domain = { path = "../midi_domain" }

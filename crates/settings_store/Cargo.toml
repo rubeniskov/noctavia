@@ -1,0 +1,6 @@
+[package]
+name = "settings_store"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

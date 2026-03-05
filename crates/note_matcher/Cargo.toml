@@ -1,0 +1,8 @@
+[package]
+name = "note_matcher"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+midi_domain = { path = "../midi_domain" }
+serde.workspace = true

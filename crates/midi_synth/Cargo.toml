@@ -1,0 +1,11 @@
+[package]
+name = "midi_synth"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rustysynth.workspace = true
+rodio.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+midi_domain = { path = "../midi_domain" }
