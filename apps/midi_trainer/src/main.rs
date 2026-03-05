@@ -22,6 +22,8 @@ struct Args {
     midi: Option<PathBuf>,
     #[arg(short, long)]
     font: Option<PathBuf>,
+    #[arg(short, long, alias = "sb")]
+    sound_bank: Option<PathBuf>,
 }
 
 pub fn main() -> iced::Result {
@@ -39,6 +41,7 @@ pub fn main() -> iced::Result {
     };
 
     let font_path = args.font.clone();
+    let sf2_path = args.sound_bank.clone();
 
     iced::application("Rusthesia", MidiTrainer::update, MidiTrainer::view)
         .subscription(MidiTrainer::subscription)
@@ -49,6 +52,15 @@ pub fn main() -> iced::Result {
 
             if let Some(song) = initial_song {
                 app.load_song(song);
+            }
+
+            // Load initial SF2 if provided
+            if let Some(path) = sf2_path {
+                if let Ok(data) = std::fs::read(path) {
+                    if let Ok(synth) = MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data)) {
+                        tasks.push(iced::Task::done(Message::SF2Loaded(synth)));
+                    }
+                }
             }
 
             // Embedded default font
@@ -62,7 +74,7 @@ pub fn main() -> iced::Result {
             };
 
             if let Some(data) = data {
-                tasks.push(iced::font::load(std::borrow::Cow::Owned(data)));
+                tasks.push(iced::font::load(std::borrow::Cow::Owned(data)).map(|_| Message::RefreshPorts));
                 app.music_font = Some(iced::Font {
                     family: if is_custom { 
                         iced::font::Family::Name("Custom Music Font") 
@@ -78,7 +90,7 @@ pub fn main() -> iced::Result {
                 app.selected_port = Some(app.midi_ports[0].clone());
             }
 
-            (app, iced::Task::batch(tasks.into_iter().map(|t| t.map(|_| Message::RefreshPorts))))
+            (app, iced::Task::batch(tasks))
         })
 }
 
