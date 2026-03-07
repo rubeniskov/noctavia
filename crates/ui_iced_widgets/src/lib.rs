@@ -177,12 +177,22 @@ impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
                 if self.muted_tracks.contains(&t_idx) { continue; }
                 let color = get_track_color(t_idx);
                 
-                for note in &track.notes {
-                    let note_start_secs = self.clock.ticks_to_secs(note.start_tick, &song.tempo_map);
-                    let note_end_secs = self.clock.ticks_to_secs(note.start_tick + note.duration_ticks, &song.tempo_map);
+                let view_start_secs = self.clock.current_secs - 2.0;
+                let view_end_secs = self.clock.current_secs + 8.0;
+
+                let start_idx = match track.notes.binary_search_by(|n| n.start_secs.partial_cmp(&(view_start_secs - 5.0)).unwrap()) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
+
+                for note in &track.notes[start_idx..] {
+                    if note.start_secs > view_end_secs {
+                        break;
+                    }
                     
-                    if note_end_secs > self.clock.current_secs - 2.0 && note_start_secs < self.clock.current_secs + 8.0 {
-                        let x_start = staff_now_x + (note_start_secs - self.clock.current_secs) / staff_secs_per_px;
+                    let note_end_secs = note.start_secs + note.duration_secs;
+                    if note_end_secs > view_start_secs {
+                        let x_start = staff_now_x + (note.start_secs - self.clock.current_secs) / staff_secs_per_px;
                         
                         if let Some(y) = get_note_y(note.key, staff_center_y, line_spacing) {
                             if let Some(font) = self.music_font {
@@ -227,13 +237,29 @@ impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
                 if self.muted_tracks.contains(&t_idx) { continue; }
                 let color = get_track_color(t_idx);
                 
-                for note in &track.notes {
-                    let note_start_secs = self.clock.ticks_to_secs(note.start_tick, &song.tempo_map);
-                    let note_end_secs = self.clock.ticks_to_secs(note.start_tick + note.duration_ticks, &song.tempo_map);
+                // Binary search for the first note that could be visible
+                // We want notes where note.start_secs + note.duration_secs > self.clock.current_secs
+                // Since notes are sorted by start_secs, we can at least find notes that start before the end of the view.
+                let view_end_secs = self.clock.current_secs + lookahead_secs;
+                
+                // Find first note that ends after current_secs. 
+                // Since they are sorted by start_secs, we can't easily binary search by end_secs.
+                // But we can binary search for the first note that starts after (current_secs - max_note_duration).
+                // For now, let's just find the range of notes that START within [current_secs - 10.0, view_end_secs]
+                let start_idx = match track.notes.binary_search_by(|n| n.start_secs.partial_cmp(&(self.clock.current_secs - 5.0)).unwrap()) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
+
+                for note in &track.notes[start_idx..] {
+                    if note.start_secs > view_end_secs {
+                        break;
+                    }
                     
-                    if note_end_secs > self.clock.current_secs && note_start_secs < self.clock.current_secs + lookahead_secs {
+                    let note_end_secs = note.start_secs + note.duration_secs;
+                    if note_end_secs > self.clock.current_secs {
                         let x = (note.key as f32 - 21.0) * key_width;
-                        let y_start = hit_line_y - ((note_start_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
+                        let y_start = hit_line_y - ((note.start_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
                         let y_end = hit_line_y - ((note_end_secs - self.clock.current_secs) / lookahead_secs) * (hit_line_y - roll_top_y);
                         
                         let y_start_clamped = y_start.min(hit_line_y);

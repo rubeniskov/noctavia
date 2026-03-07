@@ -22,49 +22,49 @@ impl Clock {
     }
 
     pub fn ticks_to_secs(&self, target_tick: u64, tempo_map: &TempoMap) -> f32 {
-        let mut total_secs = 0.0;
-        let mut current_tick = 0u64;
-        let mut current_micros_per_quarter = 500_000u32;
-
-        for change in &tempo_map.changes {
-            if change.tick > target_tick {
-                break;
-            }
-            
-            let delta_ticks = change.tick - current_tick;
-            total_secs += (delta_ticks as f32 * current_micros_per_quarter as f32) / (self.ticks_per_quarter as f32 * 1_000_000.0);
-            
-            current_tick = change.tick;
-            current_micros_per_quarter = change.micros_per_quarter;
+        if tempo_map.changes.is_empty() {
+            return (target_tick as f32 * 500_000.0) / (self.ticks_per_quarter as f32 * 1_000_000.0);
         }
 
-        let remaining_ticks = target_tick - current_tick;
-        total_secs += (remaining_ticks as f32 * current_micros_per_quarter as f32) / (self.ticks_per_quarter as f32 * 1_000_000.0);
+        // Binary search for the tempo change at or before target_tick
+        let idx = match tempo_map.changes.binary_search_by_key(&target_tick, |c| c.tick) {
+            Ok(i) => i,
+            Err(i) => i.saturating_sub(1),
+        };
 
-        total_secs
+        let change = &tempo_map.changes[idx];
+        let delta_ticks = target_tick - change.tick;
+        let delta_secs = (delta_ticks as f64 * change.micros_per_quarter as f64) / (self.ticks_per_quarter as f64 * 1_000_000.0);
+        
+        (change.time_secs + delta_secs) as f32
     }
 
     pub fn secs_to_ticks(&self, target_secs: f32, tempo_map: &TempoMap) -> u64 {
-        let mut current_secs = 0.0;
-        let mut current_tick = 0u64;
-        let mut current_micros_per_quarter = 500_000u32;
-
-        for change in &tempo_map.changes {
-            let delta_ticks = change.tick - current_tick;
-            let delta_secs = (delta_ticks as f32 * current_micros_per_quarter as f32) / (self.ticks_per_quarter as f32 * 1_000_000.0);
-            
-            if current_secs + delta_secs > target_secs {
-                break;
-            }
-
-            current_secs += delta_secs;
-            current_tick = change.tick;
-            current_micros_per_quarter = change.micros_per_quarter;
+        if tempo_map.changes.is_empty() {
+            return (target_secs * self.ticks_per_quarter as f32 * 1_000_000.0 / 500_000.0) as u64;
         }
 
-        let remaining_secs = target_secs - current_secs;
-        let remaining_ticks = (remaining_secs * self.ticks_per_quarter as f32 * 1_000_000.0) / current_micros_per_quarter as f32;
+        let target_secs_f64 = target_secs as f64;
+
+        // Binary search for the tempo change at or before target_secs
+        // Note: binary_search_by doesn't work well with f64 directly, but tempo_map.changes should be small enough or we can use a custom search
+        let mut idx = 0;
+        let mut low = 0;
+        let mut high = tempo_map.changes.len();
+        while low < high {
+            let mid = (low + high) / 2;
+            if tempo_map.changes[mid].time_secs <= target_secs_f64 {
+                idx = mid;
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+
+        let change = &tempo_map.changes[idx];
+        let remaining_secs = target_secs_f64 - change.time_secs;
+        let remaining_ticks = (remaining_secs * self.ticks_per_quarter as f64 * 1_000_000.0) / change.micros_per_quarter as f64;
         
-        current_tick + remaining_ticks as u64
+        change.tick + remaining_ticks as u64
     }
 }

@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Note {
     pub key: u8,
     pub velocity: u8,
     pub start_tick: u64,
     pub duration_ticks: u64,
+    pub start_secs: f32,
+    pub duration_secs: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +26,7 @@ pub struct TempoMap {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TempoChange {
     pub tick: u64,
+    pub time_secs: f64,
     pub micros_per_quarter: u32,
 }
 

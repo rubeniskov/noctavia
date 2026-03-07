@@ -1,4 +1,4 @@
-use iced::widget::{column, text, container, row, pick_list, button, slider, horizontal_space, vertical_space, scrollable, checkbox};
+use iced::widget::{column, text, container, row, pick_list, button, horizontal_space, vertical_space, scrollable, checkbox};
 use iced::{Color, Element, Length, Theme, Subscription, Alignment};
 use std::time::{Duration, Instant};
 use midi_domain::Song;
@@ -207,16 +207,35 @@ impl MidiTrainer {
                         for (t_idx, track) in song.tracks.iter().enumerate() {
                             if self.muted_tracks.contains(&t_idx) { continue; }
                             
-                            for note in &track.notes {
-                                let note_end_tick = note.start_tick + note.duration_ticks;
+                            // Binary search for notes starting in [old_tick, new_tick)
+                            let start_idx = match track.notes.binary_search_by(|n| n.start_tick.cmp(&old_tick)) {
+                                Ok(i) => i,
+                                Err(i) => i,
+                            };
 
-                                if note.start_tick >= old_tick && note.start_tick < new_tick {
-                                    if let Some(synth) = &self.synth {
-                                        synth.note_on(t_idx as u8, note.key, note.velocity);
-                                    }
-                                    *self.song_active_keys.entry(note.key).or_insert(0) += 1;
+                            for note in &track.notes[start_idx..] {
+                                if note.start_tick >= new_tick {
+                                    break;
                                 }
+                                
+                                if let Some(synth) = &self.synth {
+                                    synth.note_on(t_idx as u8, note.key, note.velocity);
+                                }
+                                *self.song_active_keys.entry(note.key).or_insert(0) += 1;
+                            }
 
+                            // For note offs, we search from (old_tick - some_buffer) to catch notes that end now
+                            let off_search_start = old_tick.saturating_sub(song.ticks_per_quarter as u64 * 4); // search 4 beats back for endings
+                            let off_start_idx = match track.notes.binary_search_by(|n| n.start_tick.cmp(&off_search_start)) {
+                                Ok(i) => i,
+                                Err(i) => i,
+                            };
+
+                            for note in &track.notes[off_start_idx..] {
+                                if note.start_tick >= new_tick {
+                                    break;
+                                }
+                                let note_end_tick = note.start_tick + note.duration_ticks;
                                 if note_end_tick >= old_tick && note_end_tick < new_tick {
                                     if let Some(synth) = &self.synth {
                                         synth.note_off(t_idx as u8, note.key);
@@ -249,8 +268,7 @@ impl MidiTrainer {
                     }
                     
                     if let Some(ref mut matcher) = self.matcher {
-                        let ticks_per_secs = song.ticks_per_quarter as f32 * 2.0; 
-                        matcher.update_misses(self.clock.current_secs, ticks_per_secs);
+                        matcher.update_misses(self.clock.current_secs);
                     }
                 }
             }
@@ -263,10 +281,7 @@ impl MidiTrainer {
                             synth.note_on(15, key, velocity);
                         }
                         if let Some(ref mut matcher) = self.matcher {
-                            if let Some(ref song) = self.song {
-                                let ticks_per_secs = song.ticks_per_quarter as f32 * 2.0;
-                                matcher.on_note_on(key, self.clock.current_secs, self.clock.current_tick, ticks_per_secs);
-                            }
+                            matcher.on_note_on(key, self.clock.current_secs);
                         }
                     }
                     MidiEvent::NoteOff { key } => {
