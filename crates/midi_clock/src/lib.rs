@@ -1,4 +1,4 @@
-use midi_domain::{TempoMap, TempoChange};
+use midi_domain::TempoMap;
 
 #[derive(Debug, Clone)]
 pub struct Clock {

@@ -21,3 +21,6 @@ crossbeam-channel = "0.5"
 rodio = "0.17"
 clap = { version = "4.0", features = ["derive"] }
 rfd = "0.15"
+
+[features]
+xsynth = ["midi_synth/xsynth"]

@@ -5,7 +5,7 @@ use midi_domain::Song;
 use midi_clock::Clock;
 use midi_io::{MidiEvent, MidiInputHandler};
 use note_matcher::{NoteMatcher, Score};
-use midi_synth::{MidiSynth, PresetInfo};
+use midi_synth::{MidiSynth, PresetInfo, SynthBackend};
 use ui_iced_widgets::{PianoRoll, get_track_color};
 use ui_transport::TransportBar;
 use std::path::PathBuf;
@@ -57,7 +57,7 @@ pub fn main() -> iced::Result {
             // Load initial SF2 if provided
             if let Some(path) = sf2_path {
                 if let Ok(data) = std::fs::read(path) {
-                    if let Ok(synth) = MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data)) {
+                    if let Ok(synth) = MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data), SynthBackend::RustySynth) {
                         tasks.push(iced::Task::done(Message::SF2Loaded(synth)));
                     }
                 }
@@ -120,6 +120,7 @@ struct MidiTrainer {
     muted_tracks: HashSet<usize>,
     reverb_enabled: bool,
     chorus_enabled: bool,
+    selected_backend: SynthBackend,
     music_font: Option<iced::Font>,
 }
 
@@ -147,6 +148,7 @@ impl Default for MidiTrainer {
             muted_tracks: HashSet::new(),
             reverb_enabled: true,
             chorus_enabled: true,
+            selected_backend: SynthBackend::RustySynth,
             music_font: None,
         }
     }
@@ -164,6 +166,7 @@ enum Message {
     SongLoaded(Song),
     SF2Loaded(MidiSynth),
     PresetSelected(PresetInfo),
+    BackendSelected(SynthBackend),
     TogglePlay,
     Seek(f32),
     ToggleTrack(usize),
@@ -335,8 +338,9 @@ impl MidiTrainer {
                 );
             }
             Message::OpenSF2Dialog => {
+                let backend = self.selected_backend;
                 return iced::Task::perform(
-                    async {
+                    async move {
                         let file = rfd::AsyncFileDialog::new()
                             .add_filter("SoundFont", &["sf2"])
                             .pick_file()
@@ -344,7 +348,7 @@ impl MidiTrainer {
                         
                         if let Some(file) = file {
                             let data = file.read().await;
-                            MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data)).ok()
+                            MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data), backend).ok()
                         } else {
                             None
                         }
@@ -383,6 +387,9 @@ impl MidiTrainer {
                     }
                 }
                 self.selected_preset = Some(preset);
+            }
+            Message::BackendSelected(backend) => {
+                self.selected_backend = backend;
             }
             Message::TogglePlay => {
                 self.is_playing = !self.is_playing;
@@ -511,6 +518,11 @@ impl MidiTrainer {
                 horizontal_space().width(20),
                 button("Open MIDI").on_press(Message::OpenFileDialog),
                 button("Open SF2").on_press(Message::OpenSF2Dialog),
+                pick_list(
+                    &[SynthBackend::RustySynth, #[cfg(feature = "xsynth")] SynthBackend::XSynth][..],
+                    Some(self.selected_backend),
+                    Message::BackendSelected
+                ).width(120),
                 horizontal_space().width(20),
                 if !self.presets.is_empty() {
                     Element::from(
