@@ -15,7 +15,7 @@ pub struct MidiInputHandler {
 
 impl MidiInputHandler {
     pub fn list_ports() -> Result<Vec<String>> {
-        let midi_in = MidiInput::new("rusthesia-probe").map_err(|e| anyhow!("Failed to create MIDI input: {}", e))?;
+        let midi_in = MidiInput::new("noctavia-probe").map_err(|e| anyhow!("Failed to create MIDI input: {}", e))?;
         let ports = midi_in.ports();
         let mut names = Vec::new();
         for port in ports {
@@ -29,14 +29,14 @@ impl MidiInputHandler {
     }
 
     pub fn new_with_port(sender: Sender<MidiEvent>, port_index: usize) -> Result<Self> {
-        let midi_in = MidiInput::new("rusthesia-input").map_err(|e| anyhow!("Failed to create MIDI input: {}", e))?;
+        let midi_in = MidiInput::new("noctavia-input").map_err(|e| anyhow!("Failed to create MIDI input: {}", e))?;
         let ports = midi_in.ports();
         
         if let Some(port) = ports.get(port_index) {
             let port_name = midi_in.port_name(port).unwrap_or_else(|_| "Unknown".to_string());
             tracing::info!("Connecting to MIDI port: {}", port_name);
             
-            let connection = midi_in.connect(port, "rusthesia-conn", move |_stamp, message, _| {
+            let connection = midi_in.connect(port, "noctavia-conn", move |_stamp, message, _| {
                 if message.len() >= 3 {
                     let status = message[0] & 0xF0;
                     let key = message[1];

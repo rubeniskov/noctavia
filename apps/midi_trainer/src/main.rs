@@ -43,7 +43,7 @@ pub fn main() -> iced::Result {
     let font_path = args.font.clone();
     let sf2_path = args.sound_bank.clone();
 
-    iced::application("Rusthesia", MidiTrainer::update, MidiTrainer::view)
+    iced::application("Noctavia", MidiTrainer::update, MidiTrainer::view)
         .subscription(MidiTrainer::subscription)
         .theme(|_| Theme::CatppuccinMacchiato)
         .run_with(move || {

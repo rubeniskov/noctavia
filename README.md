@@ -1,4 +1,4 @@
-# Rusthesia - MIDI Piano Roll Trainer
+# Noctavia - MIDI Piano Roll Trainer
 
 A Synthesia-style MIDI trainer built with Rust and Iced.
 
