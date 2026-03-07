@@ -240,12 +240,14 @@ impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
                         let y_end_clamped = y_end.max(roll_top_y);
 
                         if y_start_clamped > y_end_clamped {
+                            let width = key_width - 2.0;
+                            let height = (y_start_clamped - y_end_clamped).max(4.0);
                             frame.fill_rectangle(
                                 Point::new(x + 1.0, y_end_clamped),
-                                Size::new(key_width - 2.0, (y_start_clamped - y_end_clamped).max(4.0)),
+                                Size::new(width.max(1.0), height),
                                 color
                             );
-                            frame.fill_rectangle(Point::new(x + 1.0, y_end_clamped), Size::new(key_width - 2.0, 2.0), Color::WHITE);
+                            frame.fill_rectangle(Point::new(x + 1.0, y_end_clamped), Size::new(width.max(1.0), 2.0), Color::WHITE);
                         }
                     }
                 }
@@ -267,28 +269,34 @@ impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
                 let glow_height = 150.0;
                 let glow_color = if is_user_active { Color::from_rgba(1.0, 1.0, 0.5, 0.5) } else { Color::from_rgba(0.0, 0.8, 1.0, 0.4) };
                 
-                frame.fill_rectangle(
-                    Point::new(x, hit_line_y - glow_height),
-                    Size::new(key_width - 1.0, glow_height),
-                    canvas::Fill {
-                        style: canvas::Style::Gradient(canvas::Gradient::Linear(
-                            canvas::gradient::Linear::new(Point::new(x, hit_line_y), Point::new(x, hit_line_y - glow_height))
-                                .add_stop(0.0, glow_color)
-                                .add_stop(1.0, Color::TRANSPARENT),
-                        )),
-                        ..Default::default()
-                    }
-                );
+                let width = key_width - 1.0;
+                if width > 0.0 {
+                    frame.fill_rectangle(
+                        Point::new(x, hit_line_y - glow_height),
+                        Size::new(width, glow_height),
+                        canvas::Fill {
+                            style: canvas::Style::Gradient(canvas::Gradient::Linear(
+                                canvas::gradient::Linear::new(Point::new(x, hit_line_y), Point::new(x, hit_line_y - glow_height))
+                                    .add_stop(0.0, glow_color)
+                                    .add_stop(1.0, Color::TRANSPARENT),
+                            )),
+                            ..Default::default()
+                        }
+                    );
+                }
             }
 
             let key_color = if is_active { Color::from_rgb(1.0, 1.0, 0.5) } 
                             else if is_black { Color::from_rgb(0.05, 0.05, 0.05) } 
                             else { Color::from_rgb(0.95, 0.95, 0.95) };
 
-            frame.fill_rectangle(Point::new(x, hit_line_y), Size::new(key_width - 1.0, keyboard_height), key_color);
-            if !is_black {
-                frame.stroke(&Path::rectangle(Point::new(x, hit_line_y), Size::new(key_width - 1.0, keyboard_height)),
-                    canvas::Stroke::default().with_color(Color::from_rgb(0.8, 0.8, 0.8)).with_width(0.5));
+            let width = key_width - 1.0;
+            if width > 0.0 {
+                frame.fill_rectangle(Point::new(x, hit_line_y), Size::new(width, keyboard_height), key_color);
+                if !is_black {
+                    frame.stroke(&Path::rectangle(Point::new(x, hit_line_y), Size::new(width, keyboard_height)),
+                        canvas::Stroke::default().with_color(Color::from_rgb(0.8, 0.8, 0.8)).with_width(0.5));
+                }
             }
         }
 

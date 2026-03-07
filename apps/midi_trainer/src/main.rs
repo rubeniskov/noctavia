@@ -463,7 +463,7 @@ impl MidiTrainer {
                                 let color = get_track_color(i);
                                 button(
                                     row![
-                                        container(horizontal_space().width(10)).width(5).height(20).style(move |_| container::Style {
+                                        container(horizontal_space().width(5)).height(20).style(move |_| container::Style {
                                             background: Some(color.into()),
                                             ..Default::default()
                                         }),
@@ -525,8 +525,8 @@ impl MidiTrainer {
             ..Default::default()
         });
 
-        let main_content = column![
-            header,
+        let middle_content = row![
+            sidebar,
             PianoRoll::new(
                 self.song.as_ref(),
                 &self.clock,
@@ -537,17 +537,22 @@ impl MidiTrainer {
                 Message::MouseNoteOff,
                 Message::MouseNoteDrag,
             ).music_font(self.music_font).view(),
-            TransportBar::new(
-                self.is_playing,
-                &self.clock,
-                self.bpm,
-                score,
-                Message::TogglePlay,
-                Message::Seek,
-            ).view(),
-        ];
+        ].height(Length::Fill);
 
-        row![sidebar, main_content].into()
+        let transport = TransportBar::new(
+            self.is_playing,
+            &self.clock,
+            self.bpm,
+            score,
+            Message::TogglePlay,
+            Message::Seek,
+        ).view();
+
+        column![
+            header,
+            middle_content,
+            transport
+        ].into()
     }
 
     fn subscription(&self) -> Subscription<Message> {

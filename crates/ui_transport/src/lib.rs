@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, slider, text};
+use iced::widget::{button, column, container, row, slider, text, horizontal_space};
 use iced::{Alignment, Color, Element, Length};
 use midi_clock::Clock;
 use note_matcher::Score;
