@@ -1,0 +1,6 @@
+[package]
+name = "noctavia_telemetry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

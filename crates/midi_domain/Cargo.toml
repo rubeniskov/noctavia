@@ -1,7 +1,0 @@
-[package]
-name = "midi_domain"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-serde.workspace = true

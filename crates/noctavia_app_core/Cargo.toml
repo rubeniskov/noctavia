@@ -1,0 +1,6 @@
+[package]
+name = "noctavia_app_core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

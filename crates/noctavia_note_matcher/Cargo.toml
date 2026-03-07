@@ -1,0 +1,8 @@
+[package]
+name = "noctavia_note_matcher"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+noctavia_midi_domain = { path = "../noctavia_midi_domain" }
+serde.workspace = true

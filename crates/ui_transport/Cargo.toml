@@ -1,9 +1,0 @@
-[package]
-name = "ui_transport"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-iced.workspace = true
-midi_clock = { path = "../midi_clock" }
-note_matcher = { path = "../note_matcher" }

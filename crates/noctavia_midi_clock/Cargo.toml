@@ -1,0 +1,7 @@
+[package]
+name = "noctavia_midi_clock"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+noctavia_midi_domain = { path = "../noctavia_midi_domain" }

@@ -1,0 +1,9 @@
+[package]
+name = "noctavia_ui_transport"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+iced.workspace = true
+noctavia_midi_clock = { path = "../noctavia_midi_clock" }
+noctavia_note_matcher = { path = "../noctavia_note_matcher" }

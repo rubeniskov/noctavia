@@ -190,10 +190,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "app_core"
-version = "0.1.0"
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2442,79 +2438,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "midi_clock"
-version = "0.1.0"
-dependencies = [
- "midi_domain",
-]
-
-[[package]]
-name = "midi_domain"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "midi_io"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crossbeam-channel",
- "midir",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "midi_parser"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "midi_domain",
- "midly",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "midi_synth"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "midi_domain",
- "rodio",
- "rustysynth",
- "serde",
- "thiserror 1.0.69",
- "xsynth-core",
- "xsynth-soundfonts",
-]
-
-[[package]]
-name = "midi_trainer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "crossbeam-channel",
- "iced",
- "midi_clock",
- "midi_domain",
- "midi_io",
- "midi_parser",
- "midi_synth",
- "note_matcher",
- "rfd",
- "rodio",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ui_iced_widgets",
- "ui_transport",
-]
-
-[[package]]
 name = "midir"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2664,6 +2587,121 @@ dependencies = [
 ]
 
 [[package]]
+name = "noctavia"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crossbeam-channel",
+ "iced",
+ "noctavia_midi_clock",
+ "noctavia_midi_domain",
+ "noctavia_midi_io",
+ "noctavia_midi_parser",
+ "noctavia_midi_synth",
+ "noctavia_note_matcher",
+ "noctavia_ui_iced_widgets",
+ "noctavia_ui_transport",
+ "rfd",
+ "rodio",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "noctavia_app_core"
+version = "0.1.0"
+
+[[package]]
+name = "noctavia_midi_clock"
+version = "0.1.0"
+dependencies = [
+ "noctavia_midi_domain",
+]
+
+[[package]]
+name = "noctavia_midi_domain"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "noctavia_midi_io"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossbeam-channel",
+ "midir",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "noctavia_midi_parser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "midly",
+ "noctavia_midi_domain",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "noctavia_midi_synth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "noctavia_midi_domain",
+ "rodio",
+ "rustysynth",
+ "serde",
+ "thiserror 1.0.69",
+ "xsynth-core",
+ "xsynth-soundfonts",
+]
+
+[[package]]
+name = "noctavia_note_matcher"
+version = "0.1.0"
+dependencies = [
+ "noctavia_midi_domain",
+ "serde",
+]
+
+[[package]]
+name = "noctavia_piano_roll_model"
+version = "0.1.0"
+
+[[package]]
+name = "noctavia_settings_store"
+version = "0.1.0"
+
+[[package]]
+name = "noctavia_telemetry"
+version = "0.1.0"
+
+[[package]]
+name = "noctavia_ui_iced_widgets"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "noctavia_midi_clock",
+ "noctavia_midi_domain",
+]
+
+[[package]]
+name = "noctavia_ui_transport"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "noctavia_midi_clock",
+ "noctavia_note_matcher",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2671,14 +2709,6 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
-]
-
-[[package]]
-name = "note_matcher"
-version = "0.1.0"
-dependencies = [
- "midi_domain",
- "serde",
 ]
 
 [[package]]
@@ -3266,10 +3296,6 @@ checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
 dependencies = [
  "siphasher",
 ]
-
-[[package]]
-name = "piano_roll_model"
-version = "0.1.0"
 
 [[package]]
 name = "pin-project"
@@ -3923,10 +3949,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "settings_store"
-version = "0.1.0"
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4389,10 +4411,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "telemetry"
-version = "0.1.0"
-
-[[package]]
 name = "tempfile"
 version = "3.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4692,24 +4710,6 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "ui_iced_widgets"
-version = "0.1.0"
-dependencies = [
- "iced",
- "midi_clock",
- "midi_domain",
-]
-
-[[package]]
-name = "ui_transport"
-version = "0.1.0"
-dependencies = [
- "iced",
- "midi_clock",
- "note_matcher",
 ]
 
 [[package]]

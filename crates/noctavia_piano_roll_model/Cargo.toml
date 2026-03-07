@@ -1,0 +1,6 @@
+[package]
+name = "noctavia_piano_roll_model"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

@@ -1,6 +1,0 @@
-[package]
-name = "piano_roll_model"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
