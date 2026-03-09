@@ -1,17 +1,20 @@
-use iced::widget::{column, text, container, row, pick_list, button, horizontal_space, vertical_space, scrollable, checkbox};
-use iced::{Color, Element, Length, Theme, Subscription, Alignment};
-use std::time::{Duration, Instant};
-use noctavia_midi_domain::Song;
-use noctavia_midi_clock::Clock;
-use noctavia_midi_io::{MidiEvent, MidiInputHandler};
-use noctavia_note_matcher::{NoteMatcher, Score};
-use noctavia_midi_synth::{MidiSynth, PresetInfo, SynthBackend};
-use noctavia_ui_iced_widgets::{PianoRoll, get_track_color};
-use noctavia_ui_transport::TransportBar;
-use std::path::PathBuf;
-use std::collections::{HashSet, HashMap};
-use rodio::{OutputStream, OutputStreamHandle, Sink};
 use clap::Parser;
+use iced::widget::{
+    button, checkbox, column, container, horizontal_space, pick_list, row, scrollable, text,
+    vertical_space,
+};
+use iced::{Alignment, Color, Element, Length, Subscription, Theme};
+use noctavia_midi_clock::Clock;
+use noctavia_midi_domain::Song;
+use noctavia_midi_io::{MidiEvent, MidiInputHandler};
+use noctavia_midi_synth::{MidiSynth, PresetInfo, SynthBackend};
+use noctavia_note_matcher::{NoteMatcher, Score};
+use noctavia_ui_iced_widgets::{get_track_color, PianoRoll};
+use noctavia_ui_transport::TransportBar;
+use rodio::{OutputStream, OutputStreamHandle, Sink};
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use iced::futures::SinkExt;
 
@@ -22,13 +25,14 @@ struct Args {
     midi: Option<PathBuf>,
     #[arg(short, long)]
     font: Option<PathBuf>,
+    /// Sound bank
     #[arg(short, long, alias = "sb")]
     sound_bank: Option<PathBuf>,
 }
 
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
-    
+
     let args = Args::parse();
     let initial_song = if let Some(path) = &args.midi {
         if let Ok(data) = std::fs::read(path) {
@@ -57,7 +61,11 @@ pub fn main() -> iced::Result {
             // Load initial SF2 if provided
             if let Some(path) = sf2_path {
                 if let Ok(data) = std::fs::read(path) {
-                    if let Ok(synth) = MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data), SynthBackend::RustySynth) {
+                    if let Ok(synth) = MidiSynth::new_with_sf2(
+                        44100,
+                        std::io::Cursor::new(data),
+                        SynthBackend::RustySynth,
+                    ) {
                         tasks.push(iced::Task::done(Message::SF2Loaded(synth)));
                     }
                 }
@@ -74,17 +82,19 @@ pub fn main() -> iced::Result {
             };
 
             if let Some(data) = data {
-                tasks.push(iced::font::load(std::borrow::Cow::Owned(data)).map(|_| Message::RefreshPorts));
+                tasks.push(
+                    iced::font::load(std::borrow::Cow::Owned(data)).map(|_| Message::RefreshPorts),
+                );
                 app.music_font = Some(iced::Font {
-                    family: if is_custom { 
-                        iced::font::Family::Name("Custom Music Font") 
-                    } else { 
-                        iced::font::Family::Name("Noto Music") 
+                    family: if is_custom {
+                        iced::font::Family::Name("Custom Music Font")
+                    } else {
+                        iced::font::Family::Name("Noto Music")
                     },
                     ..Default::default()
                 });
             }
-            
+
             app.midi_ports = MidiInputHandler::list_ports().unwrap_or_default();
             if !app.midi_ports.is_empty() {
                 app.selected_port = Some(app.midi_ports[0].clone());
@@ -101,7 +111,7 @@ struct MidiTrainer {
     active_keys: HashSet<u8>,
     song_active_keys: HashMap<u8, i32>,
     matcher: Option<NoteMatcher>,
-    
+
     midi_ports: Vec<String>,
     selected_port: Option<String>,
     midi_status: String,
@@ -200,7 +210,7 @@ impl MidiTrainer {
                     0.0
                 };
                 self.last_tick = now;
-                
+
                 if let Some(ref song) = self.song {
                     let old_tick = self.clock.current_tick;
                     self.clock.update(dt, &song.tempo_map);
@@ -208,10 +218,15 @@ impl MidiTrainer {
 
                     if self.is_playing && new_tick > old_tick {
                         for (t_idx, track) in song.tracks.iter().enumerate() {
-                            if self.muted_tracks.contains(&t_idx) { continue; }
-                            
+                            if self.muted_tracks.contains(&t_idx) {
+                                continue;
+                            }
+
                             // Binary search for notes starting in [old_tick, new_tick)
-                            let start_idx = match track.notes.binary_search_by(|n| n.start_tick.cmp(&old_tick)) {
+                            let start_idx = match track
+                                .notes
+                                .binary_search_by(|n| n.start_tick.cmp(&old_tick))
+                            {
                                 Ok(i) => i,
                                 Err(i) => i,
                             };
@@ -220,7 +235,7 @@ impl MidiTrainer {
                                 if note.start_tick >= new_tick {
                                     break;
                                 }
-                                
+
                                 if let Some(synth) = &self.synth {
                                     synth.note_on(t_idx as u8, note.key, note.velocity);
                                 }
@@ -228,8 +243,12 @@ impl MidiTrainer {
                             }
 
                             // For note offs, we search from (old_tick - some_buffer) to catch notes that end now
-                            let off_search_start = old_tick.saturating_sub(song.ticks_per_quarter as u64 * 4); // search 4 beats back for endings
-                            let off_start_idx = match track.notes.binary_search_by(|n| n.start_tick.cmp(&off_search_start)) {
+                            let off_search_start =
+                                old_tick.saturating_sub(song.ticks_per_quarter as u64 * 4); // search 4 beats back for endings
+                            let off_start_idx = match track
+                                .notes
+                                .binary_search_by(|n| n.start_tick.cmp(&off_search_start))
+                            {
                                 Ok(i) => i,
                                 Err(i) => i,
                             };
@@ -269,7 +288,7 @@ impl MidiTrainer {
                             }
                         }
                     }
-                    
+
                     if let Some(ref mut matcher) = self.matcher {
                         matcher.update_misses(self.clock.current_secs);
                     }
@@ -320,7 +339,7 @@ impl MidiTrainer {
                             .add_filter("MIDI", &["mid", "midi"])
                             .pick_file()
                             .await;
-                        
+
                         if let Some(file) = file {
                             let data = file.read().await;
                             noctavia_midi_parser::parse_file(&data).ok()
@@ -334,7 +353,7 @@ impl MidiTrainer {
                         } else {
                             Message::RefreshPorts
                         }
-                    }
+                    },
                 );
             }
             Message::OpenSF2Dialog => {
@@ -345,7 +364,7 @@ impl MidiTrainer {
                             .add_filter("SoundFont", &["sf2"])
                             .pick_file()
                             .await;
-                        
+
                         if let Some(file) = file {
                             let data = file.read().await;
                             MidiSynth::new_with_sf2(44100, std::io::Cursor::new(data), backend).ok()
@@ -359,7 +378,7 @@ impl MidiTrainer {
                         } else {
                             Message::RefreshPorts
                         }
-                    }
+                    },
                 );
             }
             Message::SongLoaded(song) => {
@@ -370,7 +389,7 @@ impl MidiTrainer {
                 if !self.presets.is_empty() {
                     self.selected_preset = Some(self.presets[0].clone());
                 }
-                
+
                 if let Some(handle) = &self.audio_handle {
                     if let Ok(sink) = Sink::try_new(handle) {
                         sink.append(synth.get_source());
@@ -454,7 +473,7 @@ impl MidiTrainer {
                 if let Some(synth) = &self.synth {
                     synth.note_off(15, old_key);
                 }
-                
+
                 // Press new
                 self.active_keys.insert(new_key);
                 if let Some(synth) = &self.synth {
@@ -475,35 +494,61 @@ impl MidiTrainer {
         // --- Sidebar ---
         let sidebar = container(
             column![
-                text("TRACKS").size(16).color(Color::from_rgb(0.5, 0.5, 0.5)),
+                text("TRACKS")
+                    .size(16)
+                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
                 vertical_space().height(10),
                 scrollable(
                     column(
-                        self.song.as_ref().map(|s| {
-                            s.tracks.iter().enumerate().map(|(i, t)| {
-                                let is_muted = self.muted_tracks.contains(&i);
-                                let color = get_track_color(i);
-                                button(
-                                    row![
-                                        container(horizontal_space().width(5)).height(20).style(move |_| container::Style {
-                                            background: Some(color.into()),
-                                            ..Default::default()
-                                        }),
-                                        text(&t.name).size(14).color(if is_muted { Color::from_rgb(0.3, 0.3, 0.3) } else { Color::WHITE }),
-                                    ].spacing(10).align_y(Alignment::Center)
-                                )
-                                .on_press(Message::ToggleTrack(i))
-                                .style(button::secondary)
-                                .into()
-                            }).collect()
-                        }).unwrap_or_else(Vec::new)
-                    ).spacing(5)
+                        self.song
+                            .as_ref()
+                            .map(|s| {
+                                s.tracks
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, t)| {
+                                        let is_muted = self.muted_tracks.contains(&i);
+                                        let color = get_track_color(i);
+                                        button(
+                                            row![
+                                                container(horizontal_space().width(5))
+                                                    .height(20)
+                                                    .style(move |_| container::Style {
+                                                        background: Some(color.into()),
+                                                        ..Default::default()
+                                                    }),
+                                                text(&t.name).size(14).color(if is_muted {
+                                                    Color::from_rgb(0.3, 0.3, 0.3)
+                                                } else {
+                                                    Color::WHITE
+                                                }),
+                                            ]
+                                            .spacing(10)
+                                            .align_y(Alignment::Center),
+                                        )
+                                        .on_press(Message::ToggleTrack(i))
+                                        .style(button::secondary)
+                                        .into()
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_else(Vec::new)
+                    )
+                    .spacing(5)
                 ),
                 vertical_space().height(Length::Fill),
-                text(format!("Total Notes: {}", self.song.as_ref().map(|s| s.tracks.iter().map(|t| t.notes.len()).sum::<usize>()).unwrap_or(0))).size(12).color(Color::from_rgb(0.4, 0.4, 0.4)),
+                text(format!(
+                    "Total Notes: {}",
+                    self.song
+                        .as_ref()
+                        .map(|s| s.tracks.iter().map(|t| t.notes.len()).sum::<usize>())
+                        .unwrap_or(0)
+                ))
+                .size(12)
+                .color(Color::from_rgb(0.4, 0.4, 0.4)),
             ]
             .padding(20)
-            .width(250)
+            .width(250),
         )
         .height(Length::Fill)
         .style(|_| container::Style {
@@ -519,32 +564,53 @@ impl MidiTrainer {
                 button("Open MIDI").on_press(Message::OpenFileDialog),
                 button("Open SF2").on_press(Message::OpenSF2Dialog),
                 pick_list(
-                    &[SynthBackend::RustySynth, #[cfg(feature = "xsynth")] SynthBackend::XSynth][..],
+                    &[
+                        SynthBackend::RustySynth,
+                        #[cfg(feature = "xsynth")]
+                        SynthBackend::XSynth
+                    ][..],
                     Some(self.selected_backend),
                     Message::BackendSelected
-                ).width(120),
+                )
+                .width(120),
                 horizontal_space().width(20),
                 if !self.presets.is_empty() {
                     Element::from(
                         row![
-                            checkbox("Reverb", self.reverb_enabled).on_toggle(Message::ToggleReverb),
-                            checkbox("Chorus", self.chorus_enabled).on_toggle(Message::ToggleChorus),
-                            pick_list(&self.presets[..], self.selected_preset.clone(), Message::PresetSelected)
-                                .placeholder("Select Instrument")
-                                .width(200)
-                        ].spacing(10).align_y(Alignment::Center)
+                            checkbox("Reverb", self.reverb_enabled)
+                                .on_toggle(Message::ToggleReverb),
+                            checkbox("Chorus", self.chorus_enabled)
+                                .on_toggle(Message::ToggleChorus),
+                            pick_list(
+                                &self.presets[..],
+                                self.selected_preset.clone(),
+                                Message::PresetSelected
+                            )
+                            .placeholder("Select Instrument")
+                            .width(200)
+                        ]
+                        .spacing(10)
+                        .align_y(Alignment::Center),
                     )
                 } else {
-                    text("No SF2 loaded").color(Color::from_rgb(0.4, 0.4, 0.4)).into()
+                    text("No SF2 loaded")
+                        .color(Color::from_rgb(0.4, 0.4, 0.4))
+                        .into()
                 },
                 horizontal_space().width(Length::Fill),
-                pick_list(self.midi_ports.clone(), self.selected_port.clone(), Message::PortSelected)
-                    .placeholder("Select MIDI Device"),
-                button("Refresh").on_press(Message::RefreshPorts).style(button::secondary),
+                pick_list(
+                    self.midi_ports.clone(),
+                    self.selected_port.clone(),
+                    Message::PortSelected
+                )
+                .placeholder("Select MIDI Device"),
+                button("Refresh")
+                    .on_press(Message::RefreshPorts)
+                    .style(button::secondary),
             ]
             .spacing(10)
             .align_y(Alignment::Center)
-            .padding(15)
+            .padding(15),
         )
         .width(Length::Fill)
         .style(|_| container::Style {
@@ -563,8 +629,11 @@ impl MidiTrainer {
                 Message::MouseNoteOn,
                 Message::MouseNoteOff,
                 Message::MouseNoteDrag,
-            ).music_font(self.music_font).view(),
-        ].height(Length::Fill);
+            )
+            .music_font(self.music_font)
+            .view(),
+        ]
+        .height(Length::Fill);
 
         let transport = TransportBar::new(
             self.is_playing,
@@ -573,29 +642,33 @@ impl MidiTrainer {
             score,
             Message::TogglePlay,
             Message::Seek,
-        ).view();
+        )
+        .view();
 
-        column![
-            header,
-            middle_content,
-            transport
-        ].into()
+        column![header, middle_content, transport].into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
         let timer = iced::time::every(Duration::from_millis(16)).map(Message::Tick);
         let midi_sub = if let Some(ref selected_port) = self.selected_port {
-            let port_index = self.midi_ports.iter().position(|p| p == selected_port).unwrap_or(0);
-            Subscription::run_with_id(format!("midi-{}", selected_port), MidiTrainer::midi_subscription(port_index))
+            let port_index = self
+                .midi_ports
+                .iter()
+                .position(|p| p == selected_port)
+                .unwrap_or(0);
+            Subscription::run_with_id(
+                format!("midi-{}", selected_port),
+                MidiTrainer::midi_subscription(port_index),
+            )
         } else {
             Subscription::none()
         };
-        
-        let keyboard_sub = iced::keyboard::on_key_press(|key, _modifiers| {
-            match key {
-                iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => Some(Message::TogglePlay),
-                _ => None,
+
+        let keyboard_sub = iced::keyboard::on_key_press(|key, _modifiers| match key {
+            iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
+                Some(Message::TogglePlay)
             }
+            _ => None,
         });
 
         Subscription::batch(vec![timer, midi_sub, keyboard_sub])
@@ -605,9 +678,13 @@ impl MidiTrainer {
         iced::stream::channel(100, move |mut output| async move {
             let (tx, rx) = crossbeam_channel::unbounded();
             if let Ok(_handler) = MidiInputHandler::new_with_port(tx, port_index) {
-                let _ = output.send(Message::MidiStatus(String::from("Connected"))).await;
+                let _ = output
+                    .send(Message::MidiStatus(String::from("Connected")))
+                    .await;
                 loop {
-                    while let Ok(event) = rx.try_recv() { let _ = output.send(Message::Midi(event)).await; }
+                    while let Ok(event) = rx.try_recv() {
+                        let _ = output.send(Message::Midi(event)).await;
+                    }
                     tokio::time::sleep(Duration::from_millis(1)).await;
                 }
             }
