@@ -26,12 +26,19 @@ rodio = "0.17"
 cpal = "0.15"
 xsynth-core = "0.3.4"
 xsynth-soundfonts = "0.3.4"
+bytemuck = "1.16"
+bytemuck_derive = "1.7"
+wgpu = "27.0"
+winit = "0.30.5"
+cryoglyph = "0.1.0"
+futures = "0.3"
 
 # Internal Workspace Crates
 noctavia_app_core = { path = "crates/noctavia_app_core" }
 noctavia_midi = { path = "crates/noctavia_midi" }
 noctavia_note_matcher = { path = "crates/noctavia_note_matcher" }
-noctavia_piano_roll_model = { path = "crates/noctavia_piano_roll_model" }
+noctavia_piano_roll = { path = "crates/noctavia_piano_roll" }
+noctavia_render = { path = "crates/noctavia_render" }
 noctavia_settings_store = { path = "crates/noctavia_settings_store" }
 noctavia_telemetry = { path = "crates/noctavia_telemetry" }
 noctavia_ui_iced_widgets = { path = "crates/noctavia_ui_iced_widgets" }

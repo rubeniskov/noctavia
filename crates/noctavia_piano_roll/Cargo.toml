@@ -1,0 +1,22 @@
+[package]
+name = "noctavia_piano_roll"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytemuck.workspace = true
+bytemuck_derive.workspace = true
+wgpu.workspace = true
+futures.workspace = true
+winit.workspace = true
+nalgebra-glm = "0.19"
+cryoglyph.workspace = true
+noctavia_render = { path = "../noctavia_render" }
+
+[[example]]
+name = "piano_roll"
+path = "examples/piano_roll.rs"
+
+[[example]]
+name = "piano_roll_key_inspector"
+path = "examples/key_inspector.rs"

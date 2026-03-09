@@ -8,15 +8,16 @@ A Synthesia-style MIDI trainer built with Rust and Iced.
 
 This project is a Rust monorepo:
 
-- [`crates/noctavia`](./crates/noctavia): Main Iced application entry point.
-- [`crates/noctavia_app_core`](./crates/noctavia_app_core): Shared application logic and state management.
-- [`crates/noctavia_midi`](./crates/noctavia_midi): Consolidated MIDI logic including domain models, file parsing, timing clock, hardware I/O, and synthesizer.
-- [`crates/noctavia_note_matcher`](./crates/noctavia_note_matcher): Logic for comparing user input against a song.
-- [`crates/noctavia_piano_roll_model`](./crates/noctavia_piano_roll_model): Rendering model for the falling-notes view.
-- [`crates/noctavia_settings_store`](./crates/noctavia_settings_store): Persistence for user configuration and preferences.
-- [`crates/noctavia_telemetry`](./crates/noctavia_telemetry): Logging and performance monitoring.
-- [`crates/noctavia_ui_iced_widgets`](./crates/noctavia_ui_iced_widgets): Custom reusable Iced UI components.
-- [`crates/noctavia_ui_transport`](./crates/noctavia_ui_transport): UI controls for playback (play, pause, seek).
+- [`noctavia`](./crates/noctavia): Main Iced application entry point.
+- [`noctavia_app_core`](./crates/noctavia_app_core): Shared application logic and state management.
+- [`noctavia_midi`](./crates/noctavia_midi): Consolidated MIDI logic including domain models, file parsing, timing clock, hardware I/O, and synthesizer.
+- [`noctavia_note_matcher`](./crates/noctavia_note_matcher): Logic for comparing user input against a song.
+- [`noctavia_piano_roll`](./crates/noctavia_piano_roll): Specialized high-performance piano roll renderer.
+- [`noctavia_render`](./crates/noctavia_render): Core 3D rendering engine, camera management, and developer visualization tools.
+- [`noctavia_settings_store`](./crates/noctavia_settings_store): Persistence for user configuration and preferences.
+- [`noctavia_telemetry`](./crates/noctavia_telemetry): Logging and performance monitoring.
+- [`noctavia_ui_iced_widgets`](./crates/noctavia_ui_iced_widgets): Custom reusable Iced UI components.
+- [`noctavia_ui_transport`](./crates/noctavia_ui_transport): UI controls for playback (play, pause, seek).
 
 ## Requirements
 

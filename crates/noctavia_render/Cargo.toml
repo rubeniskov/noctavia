@@ -1,0 +1,15 @@
+[package]
+name = "noctavia_render"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytemuck.workspace = true
+bytemuck_derive.workspace = true
+wgpu.workspace = true
+futures.workspace = true
+winit.workspace = true
+nalgebra-glm = "0.19"
+cryoglyph.workspace = true
+tracing.workspace = true
+rustc-hash = "2.1.1"
