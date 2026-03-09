@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 midly.workspace = true
-noctavia_midi_domain = { path = "../noctavia_midi_domain" }
+noctavia_midi_domain.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

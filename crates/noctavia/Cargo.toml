@@ -6,19 +6,19 @@ edition.workspace = true
 [dependencies]
 iced.workspace = true
 tokio.workspace = true
-noctavia_midi_domain = { path = "../noctavia_midi_domain" }
-noctavia_midi_parser = { path = "../noctavia_midi_parser" }
-noctavia_midi_clock = { path = "../noctavia_midi_clock" }
-noctavia_midi_io = { path = "../noctavia_midi_io" }
-noctavia_note_matcher = { path = "../noctavia_note_matcher" }
-noctavia_ui_iced_widgets = { path = "../noctavia_ui_iced_widgets" }
-noctavia_ui_transport = { path = "../noctavia_ui_transport" }
-noctavia_midi_synth = { path = "../noctavia_midi_synth" }
+noctavia_midi_domain.workspace = true
+noctavia_midi_parser.workspace = true
+noctavia_midi_clock.workspace = true
+noctavia_midi_io.workspace = true
+noctavia_note_matcher.workspace = true
+noctavia_ui_iced_widgets.workspace = true
+noctavia_ui_transport.workspace = true
+noctavia_midi_synth.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
 crossbeam-channel = "0.5"
-rodio = "0.17"
+rodio.workspace = true
 clap = { version = "4.0", features = ["derive"] }
 rfd = "0.15"
 

@@ -8,7 +8,7 @@ rustysynth.workspace = true
 rodio.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-noctavia_midi_domain = { path = "../noctavia_midi_domain" }
+noctavia_midi_domain.workspace = true
 serde = { workspace = true, features = ["derive"] }
 xsynth-core = { workspace = true, optional = true }
 xsynth-soundfonts = { workspace = true, optional = true }

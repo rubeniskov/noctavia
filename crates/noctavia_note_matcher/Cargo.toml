@@ -4,5 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-noctavia_midi_domain = { path = "../noctavia_midi_domain" }
+noctavia_midi_domain.workspace = true
 serde.workspace = true
