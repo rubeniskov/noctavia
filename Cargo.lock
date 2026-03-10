@@ -2379,6 +2379,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "cpal",
  "crossbeam-channel",
  "iced",
  "noctavia_midi",
@@ -2386,7 +2387,6 @@ dependencies = [
  "noctavia_ui_iced_widgets",
  "noctavia_ui_transport",
  "rfd",
- "rodio",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2401,14 +2401,18 @@ name = "noctavia_midi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
+ "cpal",
  "crossbeam-channel",
  "midir",
  "midly",
  "rodio",
+ "rustfft",
  "rustysynth",
  "serde",
  "thiserror 1.0.69",
  "tracing",
+ "wide",
  "xsynth-core",
  "xsynth-soundfonts",
 ]

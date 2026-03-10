@@ -15,7 +15,11 @@ midly.workspace = true
 
 # IO
 midir.workspace = true
+cpal.workspace = true
 crossbeam-channel = "0.5"
+clap = { version = "4.0", features = ["derive"] }
+rustfft = "6.2"
+wide = "0.7"
 
 # Synth
 rustysynth.workspace = true

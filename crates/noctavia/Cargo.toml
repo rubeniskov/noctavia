@@ -13,8 +13,8 @@ noctavia_ui_transport.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
+cpal.workspace = true
 crossbeam-channel = "0.5"
-rodio.workspace = true
 clap = { version = "4.0", features = ["derive"] }
 rfd = "0.15"
 

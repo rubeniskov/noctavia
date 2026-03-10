@@ -8,7 +8,7 @@ use noctavia_midi::{Clock, Song, MidiEvent, MidiInputHandler, MidiSynth, PresetI
 use noctavia_note_matcher::{NoteMatcher, Score};
 use noctavia_ui_iced_widgets::{get_track_color, PianoRoll};
 use noctavia_ui_transport::TransportBar;
-use rodio::{OutputStream, OutputStreamHandle, Sink};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,6 +26,9 @@ struct Args {
     /// Sound bank
     #[arg(short, long, alias = "sb")]
     sound_bank: Option<PathBuf>,
+    /// Initial MIDI port index
+    #[arg(short = 'p', long)]
+    midi_port: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +47,6 @@ enum Message {
     TogglePlay,
     Seek(f32),
     ToggleTrack(usize),
-    BpmChanged(f32),
     ToggleReverb(bool),
     ToggleChorus(bool),
     MouseNoteOn(u8),
@@ -116,7 +118,11 @@ pub fn main() -> iced::Result {
         }
 
         app.midi_ports = MidiInputHandler::list_ports().unwrap_or_default();
-        if !app.midi_ports.is_empty() {
+        if let Some(port_idx) = args.midi_port {
+            if let Some(port_name) = app.midi_ports.get(port_idx) {
+                app.selected_port = Some(port_name.clone());
+            }
+        } else if !app.midi_ports.is_empty() {
             app.selected_port = Some(app.midi_ports[0].clone());
         }
 
@@ -141,12 +147,12 @@ struct MidiTrainer {
     midi_ports: Vec<String>,
     selected_port: Option<String>,
     midi_status: String,
+    midi_latency: Option<Duration>,
 
     // Audio
-    _audio_stream: Option<OutputStream>,
-    audio_handle: Option<OutputStreamHandle>,
+    cpal_stream: Option<cpal::Stream>,
     synth: Option<MidiSynth>,
-    synth_sink: Option<Sink>,
+    synth_id: usize,
     presets: Vec<PresetInfo>,
     selected_preset: Option<PresetInfo>,
 
@@ -162,7 +168,6 @@ struct MidiTrainer {
 
 impl Default for MidiTrainer {
     fn default() -> Self {
-        let (stream, handle) = OutputStream::try_default().ok().unzip();
         Self {
             last_tick: Instant::now(),
             clock: Clock::new(480),
@@ -173,10 +178,10 @@ impl Default for MidiTrainer {
             midi_ports: Vec::new(),
             selected_port: None,
             midi_status: String::from("Disconnected"),
-            _audio_stream: stream,
-            audio_handle: handle,
+            midi_latency: None,
+            cpal_stream: None,
             synth: None,
-            synth_sink: None,
+            synth_id: 0,
             presets: Vec::new(),
             selected_preset: None,
             is_playing: false,
@@ -301,27 +306,30 @@ impl MidiTrainer {
                 }
             }
             Message::Midi(event) => {
+                let now = Instant::now();
                 match event {
-                    MidiEvent::NoteOn { key, velocity } => {
+                    MidiEvent::NoteOn {
+                        key,
+                        velocity: _,
+                        timestamp,
+                    } => {
+                        self.midi_latency = Some(now.duration_since(timestamp));
                         self.active_keys.insert(key);
-                        if let Some(synth) = &self.synth {
-                            // Use channel 15 for live input or similar
-                            synth.note_on(15, key, velocity);
-                        }
+                        // synth processing is now handled directly in MidiInputHandler
                         if let Some(ref mut matcher) = self.matcher {
                             matcher.on_note_on(key, self.clock.current_secs);
                         }
                     }
-                    MidiEvent::NoteOff { key } => {
+                    MidiEvent::NoteOff { key, timestamp } => {
+                        self.midi_latency = Some(now.duration_since(timestamp));
                         self.active_keys.remove(&key);
-                        if let Some(synth) = &self.synth {
-                            synth.note_off(15, key);
-                        }
                     }
-                    MidiEvent::ControlChange { controller, value } => {
-                        if let Some(synth) = &self.synth {
-                            synth.control_change(15, controller, value);
-                        }
+                    MidiEvent::ControlChange {
+                        controller: _,
+                        value: _,
+                        timestamp,
+                    } => {
+                        self.midi_latency = Some(now.duration_since(timestamp));
                     }
                 }
             }
@@ -391,17 +399,43 @@ impl MidiTrainer {
                 self.load_song(song);
             }
             Message::SF2Loaded(synth) => {
+                self.synth_id += 1;
                 self.presets = synth.get_presets().to_vec();
                 if !self.presets.is_empty() {
                     self.selected_preset = Some(self.presets[0].clone());
                 }
 
-                if let Some(handle) = &self.audio_handle {
-                    if let Ok(sink) = Sink::try_new(handle) {
-                        sink.append(synth.get_source());
-                        self.synth_sink = Some(sink);
+                // Setup CPAL stream for low latency
+                let host = cpal::default_host();
+                if let Some(device) = host.default_output_device() {
+                    if let Ok(config) = device.default_output_config() {
+                        let mut source = synth.get_source();
+                        let stream_config = cpal::StreamConfig {
+                            channels: config.channels(),
+                            sample_rate: config.sample_rate(),
+                            // 256 samples buffer size (approx 5.8ms at 44.1kHz)
+                            buffer_size: cpal::BufferSize::Fixed(256),
+                        };
+
+                        let stream = device.build_output_stream(
+                            &stream_config,
+                            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                                for sample in data.iter_mut() {
+                                    *sample = source.next().unwrap_or(0.0);
+                                }
+                            },
+                            |err| eprintln!("Audio error: {}", err),
+                            None
+                        );
+
+                        if let Ok(s) = stream {
+                            if let Ok(_) = s.play() {
+                                self.cpal_stream = Some(s);
+                            }
+                        }
                     }
                 }
+                
                 self.synth = Some(synth);
             }
             Message::PresetSelected(preset) => {
@@ -441,9 +475,6 @@ impl MidiTrainer {
                 } else {
                     self.muted_tracks.insert(idx);
                 }
-            }
-            Message::BpmChanged(val) => {
-                self.bpm = val;
             }
             Message::ToggleReverb(enabled) => {
                 self.reverb_enabled = enabled;
@@ -604,6 +635,18 @@ impl MidiTrainer {
                         .into()
                 },
                 Space::new().width(Length::Fill),
+                Element::from(if let Some(latency) = self.midi_latency {
+                    text(format!("{:.1}ms", latency.as_secs_f64() * 1000.0))
+                        .size(14)
+                        .color(if latency.as_millis() > 20 {
+                            Color::from_rgb(1.0, 0.3, 0.3)
+                        } else {
+                            Color::from_rgb(0.3, 1.0, 0.3)
+                        })
+                } else {
+                    text("0ms").size(14).color(Color::from_rgb(0.4, 0.4, 0.4))
+                }),
+                Space::new().width(10),
                 pick_list(
                     self.midi_ports.clone(),
                     self.selected_port.clone(),
@@ -663,9 +706,13 @@ impl MidiTrainer {
                 .iter()
                 .position(|p| p == selected_port)
                 .unwrap_or(0);
+            
+            // Re-run subscription when port OR synth changes
             Subscription::run_with(
-                (selected_port.clone(), port_index),
-                |(_port, idx)| MidiTrainer::midi_subscription(*idx),
+                (selected_port.clone(), port_index, self.synth.clone(), self.synth_id),
+                |(_port, idx, synth, _id)| {
+                    MidiTrainer::midi_subscription(*idx, synth.clone())
+                },
             )
         } else {
             Subscription::none()
@@ -687,10 +734,10 @@ impl MidiTrainer {
         Subscription::batch(vec![timer, midi_sub, keyboard_sub])
     }
 
-    fn midi_subscription(port_index: usize) -> impl iced::futures::Stream<Item = Message> {
+    fn midi_subscription(port_index: usize, synth: Option<MidiSynth>) -> impl iced::futures::Stream<Item = Message> {
         iced::stream::channel(100, move |mut output: iced::futures::channel::mpsc::Sender<Message>| async move {
             let (tx, rx) = crossbeam_channel::unbounded();
-            if let Ok(_handler) = MidiInputHandler::new_with_port(tx, port_index) {
+            if let Ok(_handler) = MidiInputHandler::new_with_port(tx, port_index, synth) {
                 let _ = output
                     .send(Message::MidiStatus(String::from("Connected")))
                     .await;

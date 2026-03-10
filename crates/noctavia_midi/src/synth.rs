@@ -13,7 +13,7 @@ use xsynth_core::{
     AudioPipe, AudioStreamParams, ChannelCount,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SynthBackend {
     RustySynth,
     #[cfg(feature = "xsynth")]
@@ -63,6 +63,20 @@ impl std::fmt::Debug for MidiSynth {
             .field("backend", &self.backend)
             .field("presets_count", &self.presets.len())
             .finish()
+    }
+}
+
+impl PartialEq for MidiSynth {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.engine, &other.engine)
+    }
+}
+
+impl Eq for MidiSynth {}
+
+impl std::hash::Hash for MidiSynth {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.engine).hash(state);
     }
 }
 
@@ -232,12 +246,28 @@ impl MidiSynth {
         &self.presets
     }
 
+    pub fn process_event(&self, event: &crate::io::MidiEvent) {
+        match event {
+            crate::io::MidiEvent::NoteOn { key, velocity, .. } => {
+                self.note_on(15, *key, *velocity);
+            }
+            crate::io::MidiEvent::NoteOff { key, .. } => {
+                self.note_off(15, *key);
+            }
+            crate::io::MidiEvent::ControlChange { controller, value, .. } => {
+                self.control_change(15, *controller, *value);
+            }
+        }
+    }
+
     pub fn get_source(&self) -> SynthSource {
         SynthSource {
             engine: self.engine.clone(),
             sample_rate: self.sample_rate,
-            buffer: Vec::new(),
+            buffer: Vec::with_capacity(128),
             buffer_pos: 0,
+            left_buf: Vec::with_capacity(64),
+            right_buf: Vec::with_capacity(64),
         }
     }
 }
@@ -247,6 +277,8 @@ pub struct SynthSource {
     sample_rate: u32,
     buffer: Vec<f32>,
     buffer_pos: usize,
+    left_buf: Vec<f32>,
+    right_buf: Vec<f32>,
 }
 
 impl Iterator for SynthSource {
@@ -265,19 +297,23 @@ impl Iterator for SynthSource {
 
 impl SynthSource {
     fn fill_buffer(&mut self) {
-        let block_size = 128; 
-        self.buffer.resize(block_size * 2, 0.0);
+        let block_size = 64; 
+        if self.buffer.len() != block_size * 2 {
+            self.buffer.resize(block_size * 2, 0.0);
+        }
         
         if let Ok(mut engine) = self.engine.lock() {
             match &mut *engine {
                 Engine::Rusty(s) => {
-                    let mut left = vec![0.0; block_size];
-                    let mut right = vec![0.0; block_size];
-                    s.render(&mut left, &mut right);
+                    if self.left_buf.len() != block_size {
+                        self.left_buf.resize(block_size, 0.0);
+                        self.right_buf.resize(block_size, 0.0);
+                    }
+                    s.render(&mut self.left_buf, &mut self.right_buf);
                     
                     for i in 0..block_size {
-                        self.buffer[i * 2] = left[i];
-                        self.buffer[i * 2 + 1] = right[i];
+                        self.buffer[i * 2] = self.left_buf[i];
+                        self.buffer[i * 2 + 1] = self.right_buf[i];
                     }
                 }
                 #[cfg(feature = "xsynth")]
