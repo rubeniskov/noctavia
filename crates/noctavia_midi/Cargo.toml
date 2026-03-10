@@ -1,15 +1,25 @@
 [package]
-name = "noctavia_midi_synth"
+name = "noctavia_midi"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-rustysynth.workspace = true
-rodio.workspace = true
+# Core
+serde = { workspace = true, features = ["derive"] }
 anyhow.workspace = true
 thiserror.workspace = true
-noctavia_midi_domain.workspace = true
-serde = { workspace = true, features = ["derive"] }
+tracing.workspace = true
+
+# Parser
+midly.workspace = true
+
+# IO
+midir.workspace = true
+crossbeam-channel = "0.5"
+
+# Synth
+rustysynth.workspace = true
+rodio.workspace = true
 xsynth-core = { workspace = true, optional = true }
 xsynth-soundfonts = { workspace = true, optional = true }
 

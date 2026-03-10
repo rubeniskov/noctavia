@@ -1,4 +1,4 @@
-use noctavia_midi_domain::{Note, Song};
+use noctavia_midi::{Note, Song};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, Default)]

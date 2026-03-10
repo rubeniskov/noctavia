@@ -28,11 +28,7 @@ xsynth-soundfonts = "0.3.4"
 
 # Internal Workspace Crates
 noctavia_app_core = { path = "crates/noctavia_app_core" }
-noctavia_midi_clock = { path = "crates/noctavia_midi_clock" }
-noctavia_midi_domain = { path = "crates/noctavia_midi_domain" }
-noctavia_midi_io = { path = "crates/noctavia_midi_io" }
-noctavia_midi_parser = { path = "crates/noctavia_midi_parser" }
-noctavia_midi_synth = { path = "crates/noctavia_midi_synth" }
+noctavia_midi = { path = "crates/noctavia_midi" }
 noctavia_note_matcher = { path = "crates/noctavia_note_matcher" }
 noctavia_piano_roll_model = { path = "crates/noctavia_piano_roll_model" }
 noctavia_settings_store = { path = "crates/noctavia_settings_store" }

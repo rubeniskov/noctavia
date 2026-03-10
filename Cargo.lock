@@ -2381,11 +2381,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "iced",
- "noctavia_midi_clock",
- "noctavia_midi_domain",
- "noctavia_midi_io",
- "noctavia_midi_parser",
- "noctavia_midi_synth",
+ "noctavia_midi",
  "noctavia_note_matcher",
  "noctavia_ui_iced_widgets",
  "noctavia_ui_transport",
@@ -2401,51 +2397,18 @@ name = "noctavia_app_core"
 version = "0.1.0"
 
 [[package]]
-name = "noctavia_midi_clock"
-version = "0.1.0"
-dependencies = [
- "noctavia_midi_domain",
-]
-
-[[package]]
-name = "noctavia_midi_domain"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "noctavia_midi_io"
+name = "noctavia_midi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
  "midir",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "noctavia_midi_parser"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "midly",
- "noctavia_midi_domain",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "noctavia_midi_synth"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "noctavia_midi_domain",
  "rodio",
  "rustysynth",
  "serde",
  "thiserror 1.0.69",
+ "tracing",
  "xsynth-core",
  "xsynth-soundfonts",
 ]
@@ -2454,7 +2417,7 @@ dependencies = [
 name = "noctavia_note_matcher"
 version = "0.1.0"
 dependencies = [
- "noctavia_midi_domain",
+ "noctavia_midi",
  "serde",
 ]
 
@@ -2475,8 +2438,7 @@ name = "noctavia_ui_iced_widgets"
 version = "0.1.0"
 dependencies = [
  "iced",
- "noctavia_midi_clock",
- "noctavia_midi_domain",
+ "noctavia_midi",
 ]
 
 [[package]]
@@ -2484,7 +2446,7 @@ name = "noctavia_ui_transport"
 version = "0.1.0"
 dependencies = [
  "iced",
- "noctavia_midi_clock",
+ "noctavia_midi",
  "noctavia_note_matcher",
 ]
 

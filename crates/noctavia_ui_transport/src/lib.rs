@@ -1,6 +1,6 @@
 use iced::widget::{button, column, container, row, slider, text};
 use iced::{Alignment, Color, Element, Length};
-use noctavia_midi_clock::Clock;
+use noctavia_midi::Clock;
 use noctavia_note_matcher::Score;
 
 pub struct TransportBar<'a, Message> {

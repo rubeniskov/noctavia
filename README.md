@@ -8,19 +8,15 @@ A Synthesia-style MIDI trainer built with Rust and Iced.
 
 This project is a Rust monorepo:
 
-- [`noctavia`](./crates/noctavia): Main Iced application entry point.
-- [`noctavia_app_core`](./crates/noctavia_app_core): Shared application logic and state management.
-- [`noctavia_midi_clock`](./crates/noctavia_midi_clock): Precise timing and playback clock for MIDI events.
-- [`noctavia_midi_domain`](./crates/noctavia_midi_domain): Core domain types (Notes, Songs, Tracks).
-- [`noctavia_midi_io`](./crates/noctavia_midi_io): Hardware MIDI input/output abstraction.
-- [`noctavia_midi_parser`](./crates/noctavia_midi_parser): MIDI file decoding and track extraction.
-- [`noctavia_midi_synth`](./crates/noctavia_midi_synth): Built-in software synthesizer.
-- [`noctavia_note_matcher`](./crates/noctavia_note_matcher): Logic for comparing user input against a song.
-- [`noctavia_piano_roll_model`](./crates/noctavia_piano_roll_model): Rendering model for the falling-notes view.
-- [`noctavia_settings_store`](./crates/noctavia_settings_store): Persistence for user configuration and preferences.
-- [`noctavia_telemetry`](./crates/noctavia_telemetry): Logging and performance monitoring.
-- [`noctavia_ui_iced_widgets`](./crates/noctavia_ui_iced_widgets): Custom reusable Iced UI components.
-- [`noctavia_ui_transport`](./crates/noctavia_ui_transport): UI controls for playback (play, pause, seek).
+- [`crates/noctavia`](./crates/noctavia): Main Iced application entry point.
+- [`crates/noctavia_app_core`](./crates/noctavia_app_core): Shared application logic and state management.
+- [`crates/noctavia_midi`](./crates/noctavia_midi): Consolidated MIDI logic including domain models, file parsing, timing clock, hardware I/O, and synthesizer.
+- [`crates/noctavia_note_matcher`](./crates/noctavia_note_matcher): Logic for comparing user input against a song.
+- [`crates/noctavia_piano_roll_model`](./crates/noctavia_piano_roll_model): Rendering model for the falling-notes view.
+- [`crates/noctavia_settings_store`](./crates/noctavia_settings_store): Persistence for user configuration and preferences.
+- [`crates/noctavia_telemetry`](./crates/noctavia_telemetry): Logging and performance monitoring.
+- [`crates/noctavia_ui_iced_widgets`](./crates/noctavia_ui_iced_widgets): Custom reusable Iced UI components.
+- [`crates/noctavia_ui_transport`](./crates/noctavia_ui_transport): UI controls for playback (play, pause, seek).
 
 ## Requirements
 

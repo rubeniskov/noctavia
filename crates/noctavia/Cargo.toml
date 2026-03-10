@@ -6,14 +6,10 @@ edition.workspace = true
 [dependencies]
 iced.workspace = true
 tokio.workspace = true
-noctavia_midi_domain.workspace = true
-noctavia_midi_parser.workspace = true
-noctavia_midi_clock.workspace = true
-noctavia_midi_io.workspace = true
+noctavia_midi.workspace = true
 noctavia_note_matcher.workspace = true
 noctavia_ui_iced_widgets.workspace = true
 noctavia_ui_transport.workspace = true
-noctavia_midi_synth.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
@@ -23,4 +19,4 @@ clap = { version = "4.0", features = ["derive"] }
 rfd = "0.15"
 
 [features]
-xsynth = ["noctavia_midi_synth/xsynth"]
+xsynth = ["noctavia_midi/xsynth"]

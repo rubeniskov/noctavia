@@ -2,8 +2,7 @@ use iced::widget::Action;
 use iced::widget::canvas::{self, Frame, Geometry, Path, Program, Canvas, Event};
 use iced::{Color, Element, Point, Rectangle, Size, Theme, Renderer, Font};
 use iced::mouse;
-use noctavia_midi_domain::Song;
-use noctavia_midi_clock::Clock;
+use noctavia_midi::{Song, Clock};
 use std::collections::{HashSet, HashMap};
 
 pub struct PianoRoll<'a, Message> {

@@ -1,4 +1,4 @@
-use noctavia_midi_domain::TempoMap;
+use crate::domain::TempoMap;
 
 #[derive(Debug, Clone)]
 pub struct Clock {

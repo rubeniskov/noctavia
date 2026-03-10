@@ -4,10 +4,7 @@ use iced::widget::{
     Space,
 };
 use iced::{Alignment, Color, Element, Length, Subscription, Theme, Task};
-use noctavia_midi_clock::Clock;
-use noctavia_midi_domain::Song;
-use noctavia_midi_io::{MidiEvent, MidiInputHandler};
-use noctavia_midi_synth::{MidiSynth, PresetInfo, SynthBackend};
+use noctavia_midi::{Clock, Song, MidiEvent, MidiInputHandler, MidiSynth, PresetInfo, SynthBackend};
 use noctavia_note_matcher::{NoteMatcher, Score};
 use noctavia_ui_iced_widgets::{get_track_color, PianoRoll};
 use noctavia_ui_transport::TransportBar;
@@ -61,7 +58,7 @@ pub fn main() -> iced::Result {
     let args = Args::parse();
     let initial_song = if let Some(path) = &args.midi {
         if let Ok(data) = std::fs::read(path) {
-            noctavia_midi_parser::parse_file(&data).ok()
+            noctavia_midi::parse_file(&data).ok()
         } else {
             None
         }
@@ -351,7 +348,7 @@ impl MidiTrainer {
 
                         if let Some(file) = file {
                             let data = file.read().await;
-                            noctavia_midi_parser::parse_file(&data).ok()
+                            noctavia_midi::parse_file(&data).ok()
                         } else {
                             None
                         }

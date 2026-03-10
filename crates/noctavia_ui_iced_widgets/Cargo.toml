@@ -5,5 +5,4 @@ edition.workspace = true
 
 [dependencies]
 iced.workspace = true
-noctavia_midi_domain.workspace = true
-noctavia_midi_clock.workspace = true
+noctavia_midi.workspace = true

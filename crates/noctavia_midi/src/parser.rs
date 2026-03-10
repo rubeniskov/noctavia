@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use noctavia_midi_domain::{Note, Song, Track, TempoMap, TempoChange, ControlChange, ProgramChange};
+use crate::domain::{Note, Song, Track, TempoMap, TempoChange, ControlChange, ProgramChange};
 use midly::{Smf, TrackEventKind};
 use std::collections::HashMap;
 
