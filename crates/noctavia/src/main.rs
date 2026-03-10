@@ -1,9 +1,9 @@
 use clap::Parser;
 use iced::widget::{
-    button, checkbox, column, container, horizontal_space, pick_list, row, scrollable, text,
-    vertical_space,
+    button, checkbox, column, container, pick_list, row, scrollable, text,
+    Space,
 };
-use iced::{Alignment, Color, Element, Length, Subscription, Theme};
+use iced::{Alignment, Color, Element, Length, Subscription, Theme, Task};
 use noctavia_midi_clock::Clock;
 use noctavia_midi_domain::Song;
 use noctavia_midi_io::{MidiEvent, MidiInputHandler};
@@ -14,6 +14,7 @@ use noctavia_ui_transport::TransportBar;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use iced::futures::SinkExt;
@@ -30,6 +31,30 @@ struct Args {
     sound_bank: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone)]
+enum Message {
+    Tick(Instant),
+    Midi(MidiEvent),
+    MidiStatus(String),
+    PortSelected(String),
+    RefreshPorts,
+    OpenFileDialog,
+    OpenSF2Dialog,
+    SongLoaded(Song),
+    SF2Loaded(MidiSynth),
+    PresetSelected(PresetInfo),
+    BackendSelected(SynthBackend),
+    TogglePlay,
+    Seek(f32),
+    ToggleTrack(usize),
+    BpmChanged(f32),
+    ToggleReverb(bool),
+    ToggleChorus(bool),
+    MouseNoteOn(u8),
+    MouseNoteOff(u8),
+    MouseNoteDrag(u8, u8),
+}
+
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
 
@@ -44,64 +69,68 @@ pub fn main() -> iced::Result {
         None
     };
 
-    let font_path = args.font.clone();
-    let sf2_path = args.sound_bank.clone();
+    let initial_song = Arc::new(initial_song);
+    let font_path = Arc::new(args.font.clone());
+    let sf2_path = Arc::new(args.sound_bank.clone());
 
-    iced::application("Noctavia", MidiTrainer::update, MidiTrainer::view)
-        .subscription(MidiTrainer::subscription)
-        .theme(|_| Theme::CatppuccinMacchiato)
-        .run_with(move || {
-            let mut app = MidiTrainer::default();
-            let mut tasks = Vec::new();
+    let boot = move || {
+        let mut app = MidiTrainer::default();
+        let mut tasks = Vec::new();
 
-            if let Some(song) = initial_song {
-                app.load_song(song);
-            }
+        if let Some(song) = (*initial_song).clone() {
+            app.load_song(song);
+        }
 
-            // Load initial SF2 if provided
-            if let Some(path) = sf2_path {
-                if let Ok(data) = std::fs::read(path) {
-                    if let Ok(synth) = MidiSynth::new_with_sf2(
-                        44100,
-                        std::io::Cursor::new(data),
-                        SynthBackend::RustySynth,
-                    ) {
-                        tasks.push(iced::Task::done(Message::SF2Loaded(synth)));
-                    }
+        // Load initial SF2 if provided
+        if let Some(path) = (*sf2_path).clone() {
+            if let Ok(data) = std::fs::read(path) {
+                if let Ok(synth) = MidiSynth::new_with_sf2(
+                    44100,
+                    std::io::Cursor::new(data),
+                    SynthBackend::RustySynth,
+                ) {
+                    tasks.push(Task::done(Message::SF2Loaded(synth)));
                 }
             }
+        }
 
-            // Embedded default font
-            const DEFAULT_MUSIC_FONT: &[u8] = include_bytes!("../../../assets/MusicFont.ttf");
+        // Embedded default font
+        const DEFAULT_MUSIC_FONT: &[u8] = include_bytes!("../../../assets/MusicFont.ttf");
 
-            // Load music font (either from CLI arg or the embedded default)
-            let (data, is_custom) = if let Some(path) = font_path {
-                (std::fs::read(path).ok(), true)
-            } else {
-                (Some(DEFAULT_MUSIC_FONT.to_vec()), false)
-            };
+        // Load music font (either from CLI arg or the embedded default)
+        let (data, is_custom) = if let Some(path) = (*font_path).clone() {
+            (std::fs::read(path).ok(), true)
+        } else {
+            (Some(DEFAULT_MUSIC_FONT.to_vec()), false)
+        };
 
-            if let Some(data) = data {
-                tasks.push(
-                    iced::font::load(std::borrow::Cow::Owned(data)).map(|_| Message::RefreshPorts),
-                );
-                app.music_font = Some(iced::Font {
-                    family: if is_custom {
-                        iced::font::Family::Name("Custom Music Font")
-                    } else {
-                        iced::font::Family::Name("Noto Music")
-                    },
-                    ..Default::default()
-                });
-            }
+        if let Some(data) = data {
+            tasks.push(
+                iced::font::load(std::borrow::Cow::Owned(data)).map(|_| Message::RefreshPorts),
+            );
+            app.music_font = Some(iced::Font {
+                family: if is_custom {
+                    iced::font::Family::Name("Custom Music Font")
+                } else {
+                    iced::font::Family::Name("Noto Music")
+                },
+                ..Default::default()
+            });
+        }
 
-            app.midi_ports = MidiInputHandler::list_ports().unwrap_or_default();
-            if !app.midi_ports.is_empty() {
-                app.selected_port = Some(app.midi_ports[0].clone());
-            }
+        app.midi_ports = MidiInputHandler::list_ports().unwrap_or_default();
+        if !app.midi_ports.is_empty() {
+            app.selected_port = Some(app.midi_ports[0].clone());
+        }
 
-            (app, iced::Task::batch(tasks))
-        })
+        (app, Task::batch(tasks))
+    };
+
+    iced::application(boot, MidiTrainer::update, MidiTrainer::view)
+        .title("Noctavia")
+        .subscription(MidiTrainer::subscription)
+        .theme(MidiTrainer::theme)
+        .run()
 }
 
 struct MidiTrainer {
@@ -146,46 +175,22 @@ impl Default for MidiTrainer {
             matcher: None,
             midi_ports: Vec::new(),
             selected_port: None,
-            midi_status: String::from("No device selected"),
+            midi_status: String::from("Disconnected"),
             _audio_stream: stream,
             audio_handle: handle,
             synth: None,
             synth_sink: None,
             presets: Vec::new(),
             selected_preset: None,
-            is_playing: true,
+            is_playing: false,
             bpm: 120.0,
             muted_tracks: HashSet::new(),
-            reverb_enabled: true,
-            chorus_enabled: true,
+            reverb_enabled: false,
+            chorus_enabled: false,
             selected_backend: SynthBackend::RustySynth,
             music_font: None,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    Tick(Instant),
-    Midi(MidiEvent),
-    MidiStatus(String),
-    PortSelected(String),
-    RefreshPorts,
-    OpenFileDialog,
-    OpenSF2Dialog,
-    SongLoaded(Song),
-    SF2Loaded(MidiSynth),
-    PresetSelected(PresetInfo),
-    BackendSelected(SynthBackend),
-    TogglePlay,
-    Seek(f32),
-    ToggleTrack(usize),
-    BpmChanged(f32),
-    MouseNoteOn(u8),
-    MouseNoteOff(u8),
-    MouseNoteDrag(u8, u8),
-    ToggleReverb(bool),
-    ToggleChorus(bool),
 }
 
 impl MidiTrainer {
@@ -201,7 +206,11 @@ impl MidiTrainer {
         self.is_playing = true;
     }
 
-    fn update(&mut self, message: Message) -> iced::Task<Message> {
+    fn theme(&self) -> Theme {
+        Theme::CatppuccinMacchiato
+    }
+
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick(now) => {
                 let dt = if self.is_playing {
@@ -333,7 +342,7 @@ impl MidiTrainer {
                 }
             }
             Message::OpenFileDialog => {
-                return iced::Task::perform(
+                return Task::perform(
                     async {
                         let file = rfd::AsyncFileDialog::new()
                             .add_filter("MIDI", &["mid", "midi"])
@@ -358,7 +367,7 @@ impl MidiTrainer {
             }
             Message::OpenSF2Dialog => {
                 let backend = self.selected_backend;
-                return iced::Task::perform(
+                return Task::perform(
                     async move {
                         let file = rfd::AsyncFileDialog::new()
                             .add_filter("SoundFont", &["sf2"])
@@ -481,7 +490,7 @@ impl MidiTrainer {
                 }
             }
         }
-        iced::Task::none()
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -497,7 +506,7 @@ impl MidiTrainer {
                 text("TRACKS")
                     .size(16)
                     .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                vertical_space().height(10),
+                Space::new().height(10),
                 scrollable(
                     column(
                         self.song
@@ -511,7 +520,7 @@ impl MidiTrainer {
                                         let color = get_track_color(i);
                                         button(
                                             row![
-                                                container(horizontal_space().width(5))
+                                                container(Space::new().width(5))
                                                     .height(20)
                                                     .style(move |_| container::Style {
                                                         background: Some(color.into()),
@@ -536,7 +545,7 @@ impl MidiTrainer {
                     )
                     .spacing(5)
                 ),
-                vertical_space().height(Length::Fill),
+                Space::new().height(Length::Fill),
                 text(format!(
                     "Total Notes: {}",
                     self.song
@@ -560,7 +569,7 @@ impl MidiTrainer {
         let header = container(
             row![
                 text("MIDI Trainer").size(20),
-                horizontal_space().width(20),
+                Space::new().width(20),
                 button("Open MIDI").on_press(Message::OpenFileDialog),
                 button("Open SF2").on_press(Message::OpenSF2Dialog),
                 pick_list(
@@ -573,14 +582,14 @@ impl MidiTrainer {
                     Message::BackendSelected
                 )
                 .width(120),
-                horizontal_space().width(20),
+                Space::new().width(20),
                 if !self.presets.is_empty() {
                     Element::from(
                         row![
-                            checkbox("Reverb", self.reverb_enabled)
-                                .on_toggle(Message::ToggleReverb),
-                            checkbox("Chorus", self.chorus_enabled)
-                                .on_toggle(Message::ToggleChorus),
+                            checkbox(self.reverb_enabled).on_toggle(Message::ToggleReverb),
+                            text("Reverb"),
+                            checkbox(self.chorus_enabled).on_toggle(Message::ToggleChorus),
+                            text("Chorus"),
                             pick_list(
                                 &self.presets[..],
                                 self.selected_preset.clone(),
@@ -597,7 +606,7 @@ impl MidiTrainer {
                         .color(Color::from_rgb(0.4, 0.4, 0.4))
                         .into()
                 },
-                horizontal_space().width(Length::Fill),
+                Space::new().width(Length::Fill),
                 pick_list(
                     self.midi_ports.clone(),
                     self.selected_port.clone(),
@@ -617,6 +626,7 @@ impl MidiTrainer {
             background: Some(Color::from_rgb(0.07, 0.07, 0.1).into()),
             ..Default::default()
         });
+
 
         let middle_content = row![
             sidebar,
@@ -656,26 +666,32 @@ impl MidiTrainer {
                 .iter()
                 .position(|p| p == selected_port)
                 .unwrap_or(0);
-            Subscription::run_with_id(
-                format!("midi-{}", selected_port),
-                MidiTrainer::midi_subscription(port_index),
+            Subscription::run_with(
+                (selected_port.clone(), port_index),
+                |(_port, idx)| MidiTrainer::midi_subscription(*idx),
             )
         } else {
             Subscription::none()
         };
 
-        let keyboard_sub = iced::keyboard::on_key_press(|key, _modifiers| match key {
-            iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
-                Some(Message::TogglePlay)
+        let keyboard_sub = iced::event::listen().filter_map(|event| {
+            if let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) = event {
+                match key {
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
+                        Some(Message::TogglePlay)
+                    }
+                    _ => None,
+                }
+            } else {
+                None
             }
-            _ => None,
         });
 
         Subscription::batch(vec![timer, midi_sub, keyboard_sub])
     }
 
     fn midi_subscription(port_index: usize) -> impl iced::futures::Stream<Item = Message> {
-        iced::stream::channel(100, move |mut output| async move {
+        iced::stream::channel(100, move |mut output: iced::futures::channel::mpsc::Sender<Message>| async move {
             let (tx, rx) = crossbeam_channel::unbounded();
             if let Ok(_handler) = MidiInputHandler::new_with_port(tx, port_index) {
                 let _ = output

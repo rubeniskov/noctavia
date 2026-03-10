@@ -25,7 +25,7 @@ This project is a Rust monorepo:
 To run the application:
 
 ```bash
-cargo run -p midi_trainer
+cargo run
 ```
 
 To run tests:

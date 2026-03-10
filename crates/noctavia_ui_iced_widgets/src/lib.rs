@@ -1,4 +1,5 @@
-use iced::widget::canvas::{self, Frame, Geometry, Path, Program, event, Canvas};
+use iced::widget::Action;
+use iced::widget::canvas::{self, Frame, Geometry, Path, Program, Canvas, Event};
 use iced::{Color, Element, Point, Rectangle, Size, Theme, Renderer, Font};
 use iced::mouse;
 use noctavia_midi_domain::Song;
@@ -62,11 +63,11 @@ pub struct State {
 impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
     type State = State;
 
-    fn update(&self, state: &mut Self::State, event: event::Event, bounds: Rectangle, cursor: mouse::Cursor) -> (event::Status, Option<Message>) {
+    fn update(&self, state: &mut Self::State, event: &Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<Action<Message>> {
         let cursor_position = if let Some(p) = cursor.position_in(bounds) {
             p
         } else {
-            return (event::Status::Ignored, None);
+            return None;
         };
 
         let keyboard_height = 100.0;
@@ -78,21 +79,21 @@ impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
             let key = key_index.clamp(21, 108);
 
             match event {
-                event::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                     state.active_mouse_key = Some(key);
-                    return (event::Status::Captured, Some((self.on_note_on)(key)));
+                    return Some(Action::publish((self.on_note_on)(key)));
                 }
-                event::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                     if let Some(active_key) = state.active_mouse_key {
                          state.active_mouse_key = None;
-                         return (event::Status::Captured, Some((self.on_note_off)(active_key)));
+                         return Some(Action::publish((self.on_note_off)(active_key)));
                     }
                 }
-                event::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                     if let Some(old_key) = state.active_mouse_key {
                         if old_key != key {
                             state.active_mouse_key = Some(key);
-                            return (event::Status::Captured, Some((self.on_note_drag)(old_key, key)));
+                            return Some(Action::publish((self.on_note_drag)(old_key, key)));
                         }
                     }
                 }
@@ -100,19 +101,19 @@ impl<'a, Message: 'a> Program<Message> for PianoRoll<'a, Message> {
             }
         } else if let Some(active_key) = state.active_mouse_key {
             match event {
-                event::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                     state.active_mouse_key = None;
-                    return (event::Status::Captured, Some((self.on_note_off)(active_key)));
+                    return Some(Action::publish((self.on_note_off)(active_key)));
                 }
-                event::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                     state.active_mouse_key = None;
-                    return (event::Status::Captured, Some((self.on_note_off)(active_key)));
+                    return Some(Action::publish((self.on_note_off)(active_key)));
                 }
                 _ => {}
             }
         }
 
-        (event::Status::Ignored, None)
+        None
     }
 
     fn draw(&self, _state: &Self::State, renderer: &Renderer, _theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
